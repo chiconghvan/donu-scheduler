@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Dev & temp
+.vite/
+*.tsbuildinfo
+
+# Docs
+docs/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# Binaries
+*.exe
