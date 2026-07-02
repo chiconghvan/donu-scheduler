@@ -1,6 +1,7 @@
-use crate::models::{JobDefinition, JobRun};
+use crate::models::{JobDefinition, JobProfileRef, JobProfileState, JobRun, ScheduleConfig};
 use crate::runner;
 use crate::runner::RunnerRequest;
+use chrono::{Duration, NaiveDateTime, NaiveTime};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -97,7 +98,7 @@ async fn process_job(
     process_registry: &Arc<Mutex<HashMap<String, u32>>>,
     app_handle: &tauri::AppHandle,
 ) -> Result<(), String> {
-    let profile_ids: Vec<String> = serde_json::from_str(&job.profile_ids_json)
+    let profiles: Vec<JobProfileRef> = serde_json::from_str(&job.profile_ids_json)
         .map_err(|e| format!("Invalid profile_ids_json: {e}"))?;
 
     let schedule = if job.schedule_json.trim().is_empty() {
@@ -108,88 +109,64 @@ async fn process_job(
 
     let random_cfg = if job.random_json.trim().is_empty() {
         crate::models::RandomConfig {
-            min_gap_minutes: 5.0,
-            max_delay_factor: 1.5,
+            min_gap_minutes: 10.0,
+            max_gap_minutes: 45.0,
         }
     } else {
         crate::models::RandomConfig::parse(&job.random_json)?
     };
 
-    let today = crate::models::today_iso();
     let now = chrono::Local::now().naive_local();
-    let day_of_week = chrono::Local::now().format("%u").to_string().parse::<u32>().unwrap_or(1);
-
-    if !schedule.is_active_day(day_of_week) {
+    if !schedule.is_active_today() {
         return Ok(());
     }
 
-    let _window_start = schedule.window_start_today().ok_or("Invalid schedule start_time")?;
-    let window_end = schedule.window_end_today().ok_or("Invalid schedule end_time")?;
-
-    for profile_id in &profile_ids {
-        // Get or create state for this profile today
+    for profile in &profiles {
+        let today = crate::models::today_iso();
+        let latest_state = crate::jobs::repository::get_latest_job_profile_state(
+            db_path,
+            &job.id,
+            &profile.id,
+        )?;
         let state = crate::jobs::repository::upsert_job_profile_state(
             db_path,
             &job.id,
-            profile_id,
+            &profile.id,
             &today,
-            schedule.posts_per_profile,
+            schedule.target_count(),
         )?;
 
-        // Check if done
         if state.status == "done" || state.status == "expired" {
             continue;
         }
 
-        // Check if currently running
         if state.status == "running" && state.current_run_id.is_some() {
             continue;
         }
 
-        // Check if enough posts
-        if state.run_count >= schedule.posts_per_profile {
-            crate::jobs::repository::update_job_profile_state(
-                db_path,
-                &state.id,
-                state.run_count,
-                state.success_count,
-                state.failed_count,
-                "done",
-                state.next_run_at.as_deref(),
-                &state.last_run_at.clone().unwrap_or_default(),
-                None,
-            )?;
-            continue;
-        }
+        let next_run = match next_run_for_state(&schedule, &random_cfg, &state, latest_state.as_ref(), now)? {
+            Some(next_run) => next_run,
+            None => {
+                if let Some(status) = terminal_status_for_state(&schedule, &state, now) {
+                    crate::jobs::repository::update_job_profile_state(
+                        db_path,
+                        &state.id,
+                        state.run_count,
+                        state.success_count,
+                        state.failed_count,
+                        status,
+                        None,
+                        &state.last_run_at.clone().unwrap_or_default(),
+                        None,
+                    )?;
+                }
+                continue;
+            }
+        };
 
-        // Check if window expired
-        if now >= window_end {
-            crate::jobs::repository::update_job_profile_state(
-                db_path,
-                &state.id,
-                state.run_count,
-                state.success_count,
-                state.failed_count,
-                "expired",
-                state.next_run_at.as_deref(),
-                &state.last_run_at.clone().unwrap_or_default(),
-                None,
-            )?;
-            continue;
-        }
-
-        // Compute next_run_at if not set
-        let next_run = if let Some(ref nr) = state.next_run_at {
-            chrono::NaiveDateTime::parse_from_str(nr, "%Y-%m-%dT%H:%M:%S").ok()
-        } else {
-            let nr = crate::models::compute_next_run(
-                schedule.posts_per_profile,
-                state.run_count,
-                now,
-                window_end,
-                &random_cfg,
-            );
-            if let Some(nr) = &nr {
+        if now < next_run {
+            let next_run_str = next_run.format("%Y-%m-%dT%H:%M:%S").to_string();
+            if state.next_run_at.as_deref() != Some(next_run_str.as_str()) {
                 crate::jobs::repository::update_job_profile_state(
                     db_path,
                     &state.id,
@@ -197,21 +174,11 @@ async fn process_job(
                     state.success_count,
                     state.failed_count,
                     "pending",
-                    Some(&nr.format("%Y-%m-%dT%H:%M:%S").to_string()),
+                    Some(&next_run_str),
                     &state.last_run_at.clone().unwrap_or_default(),
                     None,
                 )?;
             }
-            nr
-        };
-
-        let next_run = match next_run {
-            Some(nr) => nr,
-            None => continue,
-        };
-
-        // Check if it's time to run
-        if now < next_run {
             continue;
         }
 
@@ -219,16 +186,14 @@ async fn process_job(
         let run_id = crate::models::new_id();
         let now_str = crate::models::now_iso();
         let script_path = job.script_path_for_run(db_path).unwrap_or_default();
-        let log_path = crate::run_logs::prepare_log_path(&script_path, &profile_id, &run_id, &now_str)?;
-        let (profile_name, group_name) = crate::db::open_db(db_path)
-            .ok()
-            .and_then(|conn| crate::db::get_cached_profile(&conn, profile_id, "donut").ok().flatten())
-            .unwrap_or_else(|| (profile_id.clone(), None));
+        let log_path = crate::run_logs::prepare_log_path(&script_path, &profile.id, &run_id, &now_str)?;
+        let profile_name = profile.name.clone().unwrap_or_else(|| profile.id.clone());
+        let group_name = profile.group_name.clone();
 
         let run = JobRun {
             id: run_id.clone(),
             job_id: Some(job.id.clone()),
-            profile_id: profile_id.clone(),
+            profile_id: profile.id.clone(),
             script_id: job.script_id.clone(),
             status: "running".to_string(),
             started_at: now_str.clone(),
@@ -263,32 +228,38 @@ async fn process_job(
         let run_id_clone = run_id.clone();
         let current_run_count = state.run_count;
         let current_success_count = state.success_count;
-        let target = schedule.posts_per_profile;
+        let current_failed_count = state.failed_count;
 
         let script_path = job.script_path_for_run(&db_path_clone).unwrap_or_default();
         let job_cli_args = job.cli_args.clone();
         let job_schedule_json = job.schedule_json.clone();
-        let job_random_json = job.random_json.clone();
 
-        // Read runtime settings
+        // Runtime is managed in app data; only API URL remains configurable.
         let (runtime_path, default_api_url) = {
             if let Ok(conn) = crate::db::open_db(&db_path_clone) {
-                let rt = crate::db::get_setting(&conn, "runtime_path").unwrap_or_default();
-                let api = crate::db::get_setting(&conn, "donutbrowser_api_base_url")
-                    .unwrap_or_else(|_| "http://127.0.0.1:10108".to_string());
-                (rt, api)
+                let setting_key = match profile.manager.as_str() {
+                    "gpm" => "gpmlogin_api_base_url",
+                    "gpmglobal" => "gpmglobal_api_base_url",
+                    _ => "donutbrowser_api_base_url",
+                };
+                let api = crate::db::get_setting(&conn, setting_key)
+                    .unwrap_or_else(|_| default_api_url_for_manager(&profile.manager));
+                (crate::runtime_manager::runtime_exe_path_string(), api)
             } else {
-                (String::new(), "http://127.0.0.1:10108".to_string())
+                (
+                    crate::runtime_manager::runtime_exe_path_string(),
+                    default_api_url_for_manager(&profile.manager),
+                )
             }
         };
 
         let request = RunnerRequest {
             script_path,
-            profile_id: profile_id.clone(),
+            profile_id: profile.id.clone(),
             cli_args: job_cli_args.clone(),
             runtime_path,
             log_path: Some(log_path.clone()),
-            manager: "donut".to_string(),
+            manager: profile.manager.clone(),
             api_url: default_api_url,
         };
 
@@ -338,51 +309,22 @@ async fn process_job(
             );
 
             let new_run_count = current_run_count + 1;
-            let new_success_count = if result.success {
-                current_success_count + 1
-            } else {
-                current_success_count
-            };
-            let new_status = if new_run_count >= target {
-                "done"
-            } else {
-                "pending"
-            };
-
-            // Compute next run for remaining posts
-            let new_next_run = if new_run_count < target {
-                let now_naive = chrono::Local::now().naive_local();
-
-                if let (Ok(sched), Ok(rand_cfg)) = (
-                    crate::models::ScheduleConfig::parse(&job_schedule_json),
-                    crate::models::RandomConfig::parse(&job_random_json),
-                ) {
-                    if let Some(window_end) = sched.window_end_today() {
-                        crate::models::compute_next_run(
-                            target,
-                            new_run_count,
-                            now_naive,
-                            window_end,
-                            &rand_cfg,
-                        )
-                        .map(|dt| dt.format("%Y-%m-%dT%H:%M:%S").to_string())
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
+            let new_success_count = current_success_count + if result.success { 1 } else { 0 };
+            let new_failed_count = current_failed_count + if result.success { 0 } else { 1 };
+            let (new_status, new_next_run) = next_after_completion(
+                &job_schedule_json,
+                new_run_count,
+                new_success_count,
+                &finished_at,
+            );
 
             let _ = crate::jobs::repository::update_job_profile_state(
                 &db_path_clone,
                 &state_id,
                 new_run_count,
                 new_success_count,
-                current_run_count + 1 - new_success_count,
-                new_status,
+                new_failed_count,
+                &new_status,
                 new_next_run.as_deref(),
                 &finished_at,
                 None,
@@ -396,6 +338,178 @@ async fn process_job(
     }
 
     Ok(())
+}
+
+fn parse_dt(value: &str) -> Option<NaiveDateTime> {
+    NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok()
+}
+
+fn format_dt(value: NaiveDateTime) -> String {
+    value.format("%Y-%m-%dT%H:%M:%S").to_string()
+}
+
+fn next_run_for_state(
+    schedule: &ScheduleConfig,
+    random_cfg: &crate::models::RandomConfig,
+    state: &JobProfileState,
+    latest_state: Option<&JobProfileState>,
+    now: NaiveDateTime,
+) -> Result<Option<NaiveDateTime>, String> {
+    match schedule.schedule_type.as_str() {
+        "window_count" => next_window_count(schedule, random_cfg, state, now),
+        "fixed_interval" => next_fixed_interval(schedule, state, latest_state, now),
+        "daily_times" => next_daily_times(schedule, state, now),
+        other => Err(format!("Unsupported schedule type: {other}")),
+    }
+}
+
+fn next_window_count(
+    schedule: &ScheduleConfig,
+    random_cfg: &crate::models::RandomConfig,
+    state: &JobProfileState,
+    now: NaiveDateTime,
+) -> Result<Option<NaiveDateTime>, String> {
+    let target = schedule.runs_per_profile.unwrap_or(0);
+    if state.success_count >= target {
+        return Ok(None);
+    }
+
+    let start = schedule.window_start_today().ok_or("Invalid schedule start_time")?;
+    let end = schedule.window_end_today().ok_or("Invalid schedule end_time")?;
+    if now < start {
+        return Ok(Some(start));
+    }
+    if now > end {
+        return Ok(None);
+    }
+    if let Some(next_run_at) = state.next_run_at.as_deref().and_then(parse_dt) {
+        return Ok(Some(next_run_at));
+    }
+    if state.last_run_at.is_none() {
+        return Ok(Some(now));
+    }
+
+    Ok(crate::models::compute_next_run(
+        target,
+        state.success_count,
+        now,
+        end,
+        random_cfg,
+    ))
+}
+
+fn next_fixed_interval(
+    schedule: &ScheduleConfig,
+    state: &JobProfileState,
+    latest_state: Option<&JobProfileState>,
+    now: NaiveDateTime,
+) -> Result<Option<NaiveDateTime>, String> {
+    if let Some(next_run_at) = state.next_run_at.as_deref().and_then(parse_dt) {
+        return Ok(Some(next_run_at));
+    }
+
+    let interval = Duration::minutes(schedule.interval_minutes.unwrap_or(0));
+    let latest = latest_state.unwrap_or(state);
+    if let Some(last_run_at) = latest.last_run_at.as_deref().and_then(parse_dt) {
+        return Ok(Some(last_run_at + interval));
+    }
+
+    Ok(Some(now))
+}
+
+fn next_daily_times(
+    schedule: &ScheduleConfig,
+    state: &JobProfileState,
+    now: NaiveDateTime,
+) -> Result<Option<NaiveDateTime>, String> {
+    if let Some(next_run_at) = state.next_run_at.as_deref().and_then(parse_dt) {
+        return Ok(Some(next_run_at));
+    }
+
+    let mut times = schedule.times.clone().unwrap_or_default();
+    times.sort();
+    if state.run_count >= times.len() as i32 {
+        return Ok(None);
+    }
+    let time = NaiveTime::parse_from_str(&times[state.run_count as usize], "%H:%M")
+        .map_err(|_| "Invalid daily time".to_string())?;
+    Ok(Some(now.date().and_time(time)))
+}
+
+fn next_after_completion(
+    schedule_json: &str,
+    run_count: i32,
+    success_count: i32,
+    finished_at: &str,
+) -> (String, Option<String>) {
+    let finished = parse_dt(finished_at).unwrap_or_else(|| chrono::Local::now().naive_local());
+    let schedule = match ScheduleConfig::parse(schedule_json) {
+        Ok(schedule) => schedule,
+        Err(_) => return ("pending".to_string(), None),
+    };
+
+    match schedule.schedule_type.as_str() {
+        "window_count" => {
+            let target = schedule.runs_per_profile.unwrap_or(0);
+            if success_count >= target {
+                ("done".to_string(), None)
+            } else if let Some(end) = schedule.window_end_today() {
+                if finished > end {
+                    ("expired".to_string(), None)
+                } else {
+                    ("pending".to_string(), None)
+                }
+            } else {
+                ("pending".to_string(), None)
+            }
+        }
+        "fixed_interval" => {
+            let next = finished + Duration::minutes(schedule.interval_minutes.unwrap_or(0));
+            ("pending".to_string(), Some(format_dt(next)))
+        }
+        "daily_times" => {
+            if run_count >= schedule.target_count() {
+                ("done".to_string(), None)
+            } else {
+                ("pending".to_string(), None)
+            }
+        }
+        _ => ("pending".to_string(), None),
+    }
+}
+
+fn terminal_status_for_state(
+    schedule: &ScheduleConfig,
+    state: &JobProfileState,
+    now: NaiveDateTime,
+) -> Option<&'static str> {
+    match schedule.schedule_type.as_str() {
+        "window_count" => {
+            if state.success_count >= schedule.runs_per_profile.unwrap_or(0) {
+                Some("done")
+            } else if schedule.window_end_today().map(|end| now > end).unwrap_or(false) {
+                Some("expired")
+            } else {
+                None
+            }
+        }
+        "daily_times" => {
+            if state.run_count >= schedule.target_count() {
+                Some("done")
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn default_api_url_for_manager(manager: &str) -> String {
+    match manager {
+        "gpm" => "http://127.0.0.1:19995".to_string(),
+        "gpmglobal" => "http://127.0.0.1:9495".to_string(),
+        _ => "http://127.0.0.1:10108".to_string(),
+    }
 }
 
 impl JobDefinition {

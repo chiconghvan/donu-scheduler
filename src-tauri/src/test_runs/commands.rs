@@ -28,8 +28,7 @@ pub async fn run_script_test(
 
     let (runtime_path, api_url) = {
         let conn = crate::db::open_db(&db_path_owned).map_err(|e| e.to_string())?;
-        let runtime_path =
-            crate::db::get_setting(&conn, "runtime_path").unwrap_or_default();
+        let runtime_path = crate::runtime_manager::runtime_exe_path_string();
         let api_url = match manager.as_str() {
             "gpm" => crate::db::get_setting(&conn, "gpmlogin_api_base_url")
                 .unwrap_or_else(|_| "http://127.0.0.1:19995".to_string()),
@@ -176,8 +175,7 @@ pub async fn run_batch_test(
 
     let (runtime_path, api_url) = {
         let conn = crate::db::open_db(&db_path_owned).map_err(|e| e.to_string())?;
-        let runtime_path =
-            crate::db::get_setting(&conn, "runtime_path").unwrap_or_default();
+        let runtime_path = crate::runtime_manager::runtime_exe_path_string();
         let api_url = match manager.as_str() {
             "gpm" => crate::db::get_setting(&conn, "gpmlogin_api_base_url")
                 .unwrap_or_else(|_| "http://127.0.0.1:19995".to_string()),

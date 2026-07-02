@@ -7,6 +7,7 @@ import RunningPage from "./components/RunningPage";
 import RunHistoryPage from "./components/RunHistoryPage";
 import SettingsPage from "./components/SettingsPage";
 import { DialogProvider } from "./components/DialogHost";
+import RuntimeToastHost from "./components/RuntimeToastHost";
 
 type Page =
   | { kind: "scripts" }
@@ -82,6 +83,7 @@ export default function App() {
           {page.kind === "settings" && <SettingsPage />}
         </main>
       </div>
+      <RuntimeToastHost />
     </DialogProvider>
   );
 }

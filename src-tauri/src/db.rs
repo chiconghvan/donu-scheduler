@@ -122,7 +122,6 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         );
 
         INSERT OR IGNORE INTO settings (key, value) VALUES
-            ('runtime_path', ''),
             ('gpmlogin_api_base_url', 'http://127.0.0.1:19995'),
             ('gpmglobal_api_base_url', 'http://127.0.0.1:9495'),
             ('donutbrowser_api_base_url', 'http://127.0.0.1:10108'),
@@ -303,6 +302,7 @@ pub fn upsert_profile_cache(conn: &Connection, snapshot: &crate::models::Profile
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_cached_profile(conn: &Connection, profile_id: &str, manager: &str) -> SqlResult<Option<(String, Option<String>)>> {
     let result = conn.query_row(
         "SELECT profile_name, group_name FROM profile_cache WHERE profile_id = ?1 AND manager = ?2",

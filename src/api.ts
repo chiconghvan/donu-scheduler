@@ -86,6 +86,10 @@ export async function updateSettings(settings: Settings): Promise<void> {
   return invoke("update_settings", { settings });
 }
 
+export async function updateRuntime(): Promise<void> {
+  return invoke("update_runtime");
+}
+
 export async function runScriptTest(
   scriptId: string,
   profileId: string,

@@ -140,17 +140,45 @@ export interface RunningTask {
 }
 
 export interface Settings {
-  runtime_path: string;
   gpmlogin_api_base_url: string;
   gpmglobal_api_base_url: string;
   donutbrowser_api_base_url: string;
   global_max_parallel_runtime: number;
 }
 
+export interface RuntimeDownloadStartedPayload {
+  version: string;
+  asset_name: string;
+}
+
+export interface RuntimeUpdateAvailablePayload {
+  current_version: string;
+  latest_version: string;
+  asset_name: string;
+}
+
+export interface RuntimeUpdateSuccessPayload {
+  version: string;
+  asset_name: string;
+}
+
+export interface RuntimeUpdateErrorPayload {
+  message: string;
+}
+
 export interface ProfileSummary {
   id: string;
   name: string;
   manager: string;
+  group_name: string | null;
+}
+
+export type ManagerKey = "gpm" | "gpmglobal" | "donut";
+
+export interface SelectedJobProfile {
+  id: string;
+  manager: ManagerKey;
+  name: string;
   group_name: string | null;
 }
 

@@ -92,8 +92,9 @@ export default function RunHistoryPage() {
   const [selectedRun, setSelectedRun] = useState<RunHistoryItem | null>(null);
   const [log, setLog] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const logDialogRef = useRef<HTMLDialogElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const logContainerRef = useRef<HTMLPreElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
     try {
@@ -118,6 +119,20 @@ export default function RunHistoryPage() {
       }
     }
   }, [log]);
+
+  useEffect(() => {
+    const el = logDialogRef.current;
+    if (!el) return;
+
+    if (selectedRun && !el.open) {
+      el.showModal();
+      return;
+    }
+
+    if (!selectedRun && el.open) {
+      el.close();
+    }
+  }, [selectedRun]);
 
   const tasks = groupHistory(runs);
   const totalChildren = tasks.reduce((s, t) => s + t.children.length, 0);
@@ -156,6 +171,11 @@ export default function RunHistoryPage() {
     }
   };
 
+  const closeLog = () => {
+    setSelectedRun(null);
+    setLog("");
+  };
+
   const fmt = (value: string | null) => (value ? new Date(value).toLocaleString() : "-");
 
   return (
@@ -192,11 +212,9 @@ export default function RunHistoryPage() {
                 <Fragment key={task.id}>
                   <tr>
                     <td>
-                      {task.children.length > 1 && (
-                        <button className="expand-button" onClick={() => toggle(task.id)}>
-                          {expanded.has(task.id) ? "▼" : "▶"}
-                        </button>
-                      )}
+                      <button className="expand-button" onClick={() => toggle(task.id)}>
+                        {expanded.has(task.id) ? "▼" : "▶"}
+                      </button>
                     </td>
                     <td>{task.kind}</td>
                     <td>{task.title}</td>
@@ -267,17 +285,31 @@ export default function RunHistoryPage() {
         )}
       </div>
 
-      {selectedRun && (
-        <div className="card">
-          <h2>
-            Log Output - {selectedRun.kind}: {selectedRun.script_name || selectedRun.script_id.slice(0, 8)}
-          </h2>
-          <pre className="log-box" ref={logContainerRef}>
-            {log || "(loading...)"}
-            <div ref={logEndRef} />
-          </pre>
-        </div>
-      )}
+      <dialog
+        ref={logDialogRef}
+        className="run-history-log-dialog"
+        onCancel={(e) => {
+          e.preventDefault();
+          closeLog();
+        }}
+      >
+        {selectedRun && (
+          <div className="run-history-log-panel">
+            <div className="flex-row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+              <h2 style={{ margin: 0 }}>
+                Log Output - {selectedRun.kind}: {selectedRun.script_name || selectedRun.script_id.slice(0, 8)}
+              </h2>
+              <button className="btn btn-secondary btn-sm" onClick={closeLog}>
+                Close
+              </button>
+            </div>
+            <div className="run-history-log-box" ref={logContainerRef}>
+              <pre className="run-history-log-text">{log || "(loading...)"}</pre>
+              <div ref={logEndRef} />
+            </div>
+          </div>
+        )}
+      </dialog>
     </div>
   );
 }

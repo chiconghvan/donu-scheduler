@@ -1,4 +1,4 @@
-use chrono::{Local, NaiveTime};
+use chrono::{Datelike, Local, NaiveTime};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -179,7 +179,6 @@ pub struct RunHistoryItem {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    pub runtime_path: String,
     pub gpmlogin_api_base_url: String,
     pub gpmglobal_api_base_url: String,
     pub donutbrowser_api_base_url: String,
@@ -195,12 +194,22 @@ pub struct ProfileSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobProfileRef {
+    pub id: String,
+    pub manager: String,
+    pub name: Option<String>,
+    pub group_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScheduleConfig {
     #[serde(rename = "type")]
     pub schedule_type: String,
-    pub start_time: String,
-    pub end_time: String,
-    pub posts_per_profile: i32,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub runs_per_profile: Option<i32>,
+    pub interval_minutes: Option<i64>,
+    pub times: Option<Vec<String>>,
     pub active_days: Vec<u32>,
     pub count_mode: String,
 }
@@ -208,28 +217,86 @@ pub struct ScheduleConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RandomConfig {
     pub min_gap_minutes: f64,
-    pub max_delay_factor: f64,
+    pub max_gap_minutes: f64,
 }
 
 impl ScheduleConfig {
     pub fn parse(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| format!("Invalid schedule_json: {e}"))
+        let cfg: Self = serde_json::from_str(json).map_err(|e| format!("Invalid schedule_json: {e}"))?;
+        cfg.validate()?;
+        Ok(cfg)
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        match self.schedule_type.as_str() {
+            "window_count" => {
+                self.require_time(self.start_time.as_deref(), "start_time")?;
+                self.require_time(self.end_time.as_deref(), "end_time")?;
+                if self.runs_per_profile.unwrap_or(0) <= 0 {
+                    return Err("runs_per_profile must be greater than 0".to_string());
+                }
+            }
+            "fixed_interval" => {
+                if self.interval_minutes.unwrap_or(0) <= 0 {
+                    return Err("interval_minutes must be greater than 0".to_string());
+                }
+            }
+            "daily_times" => {
+                let times = self.times.as_ref().ok_or("times is required")?;
+                if times.is_empty() {
+                    return Err("times must not be empty".to_string());
+                }
+                for time in times {
+                    self.require_time(Some(time), "times")?;
+                }
+            }
+            other => return Err(format!("Unsupported schedule type: {other}")),
+        }
+
+        if self.active_days.is_empty()
+            || self.active_days.iter().any(|day| *day == 0 || *day > 7)
+        {
+            return Err("active_days must contain values from 1 to 7".to_string());
+        }
+
+        Ok(())
+    }
+
+    fn require_time(&self, value: Option<&str>, field: &str) -> Result<(), String> {
+        let value = value.ok_or_else(|| format!("{field} is required"))?;
+        NaiveTime::parse_from_str(value, "%H:%M")
+            .map(|_| ())
+            .map_err(|_| format!("{field} must use HH:mm format"))
     }
 
     pub fn is_active_day(&self, day_of_week: u32) -> bool {
         self.active_days.contains(&day_of_week)
     }
 
+    pub fn is_active_today(&self) -> bool {
+        let day = Local::now().weekday().number_from_monday();
+        self.is_active_day(day)
+    }
+
     pub fn window_start_today(&self) -> Option<chrono::NaiveDateTime> {
         let today = Local::now().date_naive();
-        let time = NaiveTime::parse_from_str(&self.start_time, "%H:%M").ok()?;
+        let time = NaiveTime::parse_from_str(self.start_time.as_deref()?, "%H:%M").ok()?;
         Some(today.and_time(time))
     }
 
     pub fn window_end_today(&self) -> Option<chrono::NaiveDateTime> {
         let today = Local::now().date_naive();
-        let time = NaiveTime::parse_from_str(&self.end_time, "%H:%M").ok()?;
+        let time = NaiveTime::parse_from_str(self.end_time.as_deref()?, "%H:%M").ok()?;
         Some(today.and_time(time))
+    }
+
+    pub fn target_count(&self) -> i32 {
+        match self.schedule_type.as_str() {
+            "window_count" => self.runs_per_profile.unwrap_or(0),
+            "fixed_interval" => 0,
+            "daily_times" => self.times.as_ref().map(|times| times.len() as i32).unwrap_or(0),
+            _ => 0,
+        }
     }
 }
 
@@ -257,14 +324,16 @@ pub fn compute_next_run(
     }
 
     let avg_gap = remaining_minutes / remaining_posts as f64;
-    let max_delay = avg_gap * random_cfg.max_delay_factor;
-    let min_gap = random_cfg.min_gap_minutes;
+    let min_delay = avg_gap * 0.6;
+    let max_delay = avg_gap * 1.3;
 
-    let delay = if max_delay <= min_gap {
-        min_gap
+    let random_delay = if min_delay >= max_delay {
+        min_delay
     } else {
-        rand::thread_rng().gen_range(min_gap..max_delay)
+        rand::thread_rng().gen_range(min_delay..max_delay)
     };
+
+    let delay = random_delay.clamp(random_cfg.min_gap_minutes, random_cfg.max_gap_minutes);
 
     let mut next = now + chrono::Duration::minutes(delay as i64);
     if next > window_end {

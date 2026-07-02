@@ -257,6 +257,40 @@ pub fn get_today_job_states(
     Ok(result)
 }
 
+pub fn get_latest_job_profile_state(
+    db_path: &PathBuf,
+    job_id: &str,
+    profile_id: &str,
+) -> Result<Option<JobProfileState>, String> {
+    let conn = open_db(db_path).map_err(|e| e.to_string())?;
+    let result = conn.query_row(
+        "SELECT id, job_id, profile_id, date, target_count, run_count, success_count, failed_count, status, next_run_at, last_run_at, current_run_id, created_at, updated_at FROM job_profile_states WHERE job_id=?1 AND profile_id=?2 ORDER BY updated_at DESC LIMIT 1",
+        params![job_id, profile_id],
+        |row| Ok(JobProfileState {
+            id: row.get(0)?,
+            job_id: row.get(1)?,
+            profile_id: row.get(2)?,
+            date: row.get(3)?,
+            target_count: row.get(4)?,
+            run_count: row.get(5)?,
+            success_count: row.get(6)?,
+            failed_count: row.get(7)?,
+            status: row.get(8)?,
+            next_run_at: row.get(9)?,
+            last_run_at: row.get(10)?,
+            current_run_id: row.get(11)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
+        }),
+    );
+
+    match result {
+        Ok(state) => Ok(Some(state)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 pub fn list_job_runs(db_path: &PathBuf, job_id: &str) -> Result<Vec<JobRun>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn
@@ -423,10 +457,16 @@ pub fn update_job_profile_state(
 }
 
 fn validate_job_input(input: &JobInput) -> Result<(), String> {
-    // Validate profile_ids_json is a JSON array
-    let _profile_ids: Vec<String> = serde_json::from_str(&input.profile_ids_json)
+    let profile_ids: Vec<JobProfileRef> = serde_json::from_str(&input.profile_ids_json)
         .map_err(|e| format!("Invalid profile_ids_json: {e}"))?;
-    // Note: we accept any number of profile ids
+    for profile in profile_ids {
+        if profile.id.trim().is_empty() {
+            return Err("Profile id must not be empty".to_string());
+        }
+        if !matches!(profile.manager.as_str(), "gpm" | "gpmglobal" | "donut") {
+            return Err(format!("Unsupported profile manager: {}", profile.manager));
+        }
+    }
 
     // Validate schedule_json
     if !input.schedule_json.trim().is_empty() {

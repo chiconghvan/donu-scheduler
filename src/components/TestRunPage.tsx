@@ -420,29 +420,19 @@ export default function TestRunPage() {
 
       <div className="card">
         <h2>Run Configuration</h2>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Script</label>
-            <select
-              value={scriptId}
-              onChange={(e) => setScriptId(e.target.value)}
-            >
-              <option value="">-- select script --</option>
-              {scripts.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.script_path})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Runtime Path (from Settings)</label>
-            <input
-              readOnly
-              value={settings?.runtime_path || "(not configured)"}
-              style={{ opacity: 0.6 }}
-            />
-          </div>
+        <div className="form-group">
+          <label>Script</label>
+          <select
+            value={scriptId}
+            onChange={(e) => setScriptId(e.target.value)}
+          >
+            <option value="">-- select script --</option>
+            {scripts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.script_path})
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="form-group">

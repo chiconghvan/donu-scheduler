@@ -5,6 +5,7 @@ mod models;
 mod run_logs;
 mod profile_manager;
 mod runner;
+mod runtime_manager;
 mod running;
 mod run_history;
 mod scripts;
@@ -15,7 +16,9 @@ use db::AppState;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::Manager;
+use tauri::tray::TrayIconBuilder;
 
 fn get_app_data_dir() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -52,11 +55,13 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(state)
         .setup(move |app| {
             let state_handle = app.state::<Arc<AppState>>();
             let registry = Arc::clone(&state_handle.process_registry);
             let app_handle = app.handle().clone();
+            runtime_manager::spawn_runtime_manager(app_handle.clone(), Arc::clone(&registry));
             tauri::async_runtime::spawn(async move {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(20)).await;
@@ -68,6 +73,60 @@ pub fn run() {
                     .await;
                 }
             });
+
+            if let Some(window) = app.get_webview_window("main") {
+                let window_for_hide = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = window_for_hide.hide();
+                    }
+                });
+            }
+
+            let show_item = MenuItemBuilder::with_id("show-window", "Open Window").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit-app", "Quit").build(app)?;
+            let tray_menu = MenuBuilder::new(app)
+                .item(&show_item)
+                .item(&quit_item)
+                .build()?;
+
+            let tray_icon = app
+                .default_window_icon()
+                .ok_or_else(|| "Missing default window icon".to_string())?
+                .clone()
+                .to_owned();
+
+            TrayIconBuilder::with_id("main-tray")
+                .tooltip("DonuScheduler")
+                .icon(tray_icon)
+                .menu(&tray_menu)
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
+                        if matches!(button, tauri::tray::MouseButton::Left) {
+                            if let Some(window) = tray.app_handle().get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show-window" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit-app" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -105,6 +164,7 @@ pub fn run() {
             profile_manager_cmds::list_gpmglobal_profiles,
             input_cache::commands::get_input_cache,
             input_cache::commands::save_input_cache,
+            runtime_manager::update_runtime,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

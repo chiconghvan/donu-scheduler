@@ -6,7 +6,6 @@ import { useDialog } from "./DialogHost";
 export default function SettingsPage() {
   const dialog = useDialog();
   const [settings, setSettings] = useState<Settings>({
-    runtime_path: "",
     gpmlogin_api_base_url: "http://127.0.0.1:19995",
     gpmglobal_api_base_url: "http://127.0.0.1:9495",
     donutbrowser_api_base_url: "http://127.0.0.1:10108",
@@ -38,24 +37,6 @@ export default function SettingsPage() {
   return (
     <div>
       <h1>Settings</h1>
-
-      <div className="card">
-        <h2>Runtime</h2>
-        <div className="form-group">
-          <label>Runtime Path (donumate .exe)</label>
-          <input
-            value={settings.runtime_path}
-            onChange={(e) =>
-              setSettings({ ...settings, runtime_path: e.target.value })
-            }
-            placeholder="E:\Code\DonuScheduler\donumate_v0.5.6.exe"
-          />
-          <p className="text-muted" style={{ marginTop: 4 }}>
-            Path to the donumate runtime executable. Leave empty for fake
-            execution.
-          </p>
-        </div>
-      </div>
 
       <div className="card">
         <h2>Profile Manager APIs</h2>

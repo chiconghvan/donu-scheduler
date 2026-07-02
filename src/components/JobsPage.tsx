@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Script, JobDefinition, JobInput } from "../types";
+import type { Script, JobDefinition, JobInput, SelectedJobProfile } from "../types";
 import * as api from "../api";
 import { useDialog } from "./DialogHost";
+import ProfilePickerDialog from "./ProfilePickerDialog";
 
 interface DefaultInput {
   name: string;
@@ -13,19 +14,19 @@ interface DefaultInput {
 
 const defaultSchedule = JSON.stringify(
   {
-    type: "adaptive_daily_window",
+    type: "window_count",
     start_time: "07:00",
     end_time: "11:00",
-    posts_per_profile: 8,
+    runs_per_profile: 8,
     active_days: [1, 2, 3, 4, 5, 6, 7],
-    count_mode: "attempt",
+    count_mode: "success",
   },
   null,
   2
 );
 
 const defaultRandom = JSON.stringify(
-  { min_gap_minutes: 5, max_delay_factor: 1.5 },
+  { min_gap_minutes: 10, max_gap_minutes: 45 },
   null,
   2
 );
@@ -42,6 +43,152 @@ const emptyInput: JobInput = {
   timeout_seconds: 300,
 };
 
+type ScheduleMode = "window_count" | "fixed_interval" | "daily_times";
+
+interface ScheduleUiState {
+  mode: ScheduleMode;
+  startTime: string;
+  endTime: string;
+  runsPerProfile: number;
+  intervalValue: number;
+  intervalUnit: "minutes" | "hours";
+  timesText: string;
+  activeDays: number[];
+  minGap: number;
+  maxGap: number;
+}
+
+const defaultScheduleUi: ScheduleUiState = {
+  mode: "window_count",
+  startTime: "07:00",
+  endTime: "11:00",
+  runsPerProfile: 8,
+  intervalValue: 2,
+  intervalUnit: "hours",
+  timesText: "08:00\n12:30\n20:00",
+  activeDays: [1, 2, 3, 4, 5, 6, 7],
+  minGap: 10,
+  maxGap: 45,
+};
+
+const dayLabels = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+function scheduleToJson(schedule: ScheduleUiState) {
+  if (schedule.mode === "window_count") {
+    return JSON.stringify(
+      {
+        type: "window_count",
+        start_time: schedule.startTime,
+        end_time: schedule.endTime,
+        runs_per_profile: schedule.runsPerProfile,
+        active_days: schedule.activeDays,
+        count_mode: "success",
+      },
+      null,
+      2
+    );
+  }
+  if (schedule.mode === "fixed_interval") {
+    return JSON.stringify(
+      {
+        type: "fixed_interval",
+        interval_minutes:
+          schedule.intervalUnit === "hours" ? schedule.intervalValue * 60 : schedule.intervalValue,
+        active_days: schedule.activeDays,
+        count_mode: "attempt",
+      },
+      null,
+      2
+    );
+  }
+  return JSON.stringify(
+    {
+      type: "daily_times",
+      times: schedule.timesText
+        .split(/[,\n]/)
+        .map((time) => time.trim())
+        .filter(Boolean),
+      active_days: schedule.activeDays,
+      count_mode: "attempt",
+    },
+    null,
+    2
+  );
+}
+
+function parseRandomJson(value: string) {
+  try {
+    const obj = JSON.parse(value);
+    return { minGap: Number(obj.min_gap_minutes) || 10, maxGap: Number(obj.max_gap_minutes) || 45 };
+  } catch {
+    return { minGap: 10, maxGap: 45 };
+  }
+}
+
+function randomToJson(schedule: ScheduleUiState) {
+  return JSON.stringify(
+    { min_gap_minutes: schedule.minGap, max_gap_minutes: schedule.maxGap },
+    null,
+    2
+  );
+}
+
+function jsonToSchedule(value: string, randomJson?: string): ScheduleUiState {
+  try {
+    const parsed = JSON.parse(value);
+    const rand = parseRandomJson(randomJson || "");
+    if (parsed.type === "fixed_interval") {
+      const minutes = Number(parsed.interval_minutes || 60);
+      return {
+        ...defaultScheduleUi,
+        mode: "fixed_interval",
+        intervalValue: minutes % 60 === 0 ? minutes / 60 : minutes,
+        intervalUnit: minutes % 60 === 0 ? "hours" : "minutes",
+        activeDays: parsed.active_days || defaultScheduleUi.activeDays,
+      };
+    }
+    if (parsed.type === "daily_times") {
+      return {
+        ...defaultScheduleUi,
+        mode: "daily_times",
+        timesText: (parsed.times || []).join("\n"),
+        activeDays: parsed.active_days || defaultScheduleUi.activeDays,
+      };
+    }
+    return {
+      ...defaultScheduleUi,
+      mode: "window_count",
+      startTime: parsed.start_time || defaultScheduleUi.startTime,
+      endTime: parsed.end_time || defaultScheduleUi.endTime,
+      runsPerProfile: Number(parsed.runs_per_profile || 1),
+      activeDays: parsed.active_days || defaultScheduleUi.activeDays,
+      minGap: rand.minGap,
+      maxGap: rand.maxGap,
+    };
+  } catch {
+    return defaultScheduleUi;
+  }
+}
+
+function parseSelectedProfiles(value: string): SelectedJobProfile[] {
+  try {
+    return JSON.parse(value || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function getSchedulePreview(schedule: ScheduleUiState) {
+  const days = schedule.activeDays.length === 7 ? "mỗi ngày" : `các ngày ${schedule.activeDays.map((d) => dayLabels[d - 1]).join(", ")}`;
+  if (schedule.mode === "window_count") {
+    return `Mỗi profile chạy đủ ${schedule.runsPerProfile} lần thành công từ ${schedule.startTime} đến ${schedule.endTime}, ${days}. Delay ngẫu nhiên ${schedule.minGap}-${schedule.maxGap} phút mỗi lần.`;
+  }
+  if (schedule.mode === "fixed_interval") {
+    return `Mỗi profile chạy lại sau mỗi ${schedule.intervalValue} ${schedule.intervalUnit === "hours" ? "giờ" : "phút"} kể từ lúc lần trước kết thúc, bỏ qua ngày không active.`;
+  }
+  return `Mỗi profile chạy lúc ${schedule.timesText.split(/[,\n]/).map((t) => t.trim()).filter(Boolean).join(", ") || "(chưa nhập giờ)"}, ${days}.`;
+}
+
 export default function JobsPage({
   onOpenDetail,
 }: {
@@ -54,6 +201,10 @@ export default function JobsPage({
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [defaultInputs, setDefaultInputs] = useState<DefaultInput[]>([]);
+  const [selectedProfiles, setSelectedProfiles] = useState<SelectedJobProfile[]>([]);
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const [scheduleUi, setScheduleUi] = useState<ScheduleUiState>(defaultScheduleUi);
+  const [showJsonPreview, setShowJsonPreview] = useState(false);
 
   const load = async () => {
     try {
@@ -105,10 +256,16 @@ export default function JobsPage({
   const handleSubmit = async () => {
     setLoading(true);
     try {
+      const input: JobInput = {
+        ...form,
+        profile_ids_json: JSON.stringify(selectedProfiles, null, 2),
+        schedule_json: scheduleToJson(scheduleUi),
+        random_json: randomToJson(scheduleUi),
+      };
       if (editId) {
-        await api.updateJob(editId, form);
+        await api.updateJob(editId, input);
       } else {
-        await api.createJob(form);
+        await api.createJob(input);
       }
       // Save inputs to cache for next time
       if (form.script_id) {
@@ -117,6 +274,8 @@ export default function JobsPage({
           .catch(() => {});
       }
       setForm(emptyInput);
+      setSelectedProfiles([]);
+      setScheduleUi(defaultScheduleUi);
       setDefaultInputs([]);
       setEditId(null);
       await load();
@@ -156,6 +315,8 @@ export default function JobsPage({
       cli_args: j.cli_args,
       timeout_seconds: j.timeout_seconds,
     });
+    setSelectedProfiles(parseSelectedProfiles(j.profile_ids_json));
+    setScheduleUi(jsonToSchedule(j.schedule_json, j.random_json));
     const selected = scripts.find((s) => s.id === j.script_id);
     if (selected) {
       try {
@@ -183,6 +344,15 @@ export default function JobsPage({
   return (
     <div>
       <h1>Jobs</h1>
+      <ProfilePickerDialog
+        open={profilePickerOpen}
+        selected={selectedProfiles}
+        onDone={(profiles) => {
+          setSelectedProfiles(profiles);
+          setProfilePickerOpen(false);
+        }}
+        onCancel={() => setProfilePickerOpen(false)}
+      />
 
       <div className="card">
         <h2>{editId ? "Edit Job" : "Add Job"}</h2>
@@ -287,37 +457,131 @@ export default function JobsPage({
           </div>
         )}
 
-        <div className="form-group">
-          <label>Profile IDs JSON (array of strings)</label>
-          <textarea
-            rows={2}
-            value={form.profile_ids_json}
-            onChange={(e) =>
-              setForm({ ...form, profile_ids_json: e.target.value })
-            }
-          />
+        <div className="card" style={{ background: "#0f1a30" }}>
+          <h3>Profiles</h3>
+          <div className="flex-row">
+            <button className="btn btn-secondary" onClick={() => setProfilePickerOpen(true)}>
+              Choose Profiles
+            </button>
+            <span className="text-muted">{selectedProfiles.length} selected</span>
+          </div>
+          {selectedProfiles.length > 0 && (
+            <p className="text-muted" style={{ marginTop: 8 }}>
+              {selectedProfiles.slice(0, 5).map((p) => p.name).join(", ")}
+              {selectedProfiles.length > 5 ? ` and ${selectedProfiles.length - 5} more` : ""}
+            </p>
+          )}
         </div>
-        <div className="form-row">
-          <div className="form-group">
-            <label>Schedule JSON</label>
-            <textarea
-              rows={8}
-              value={form.schedule_json}
-              onChange={(e) =>
-                setForm({ ...form, schedule_json: e.target.value })
-              }
-            />
+
+        <div className="card" style={{ background: "#0f1a30" }}>
+          <h3>Schedule</h3>
+          <div className="schedule-mode-grid">
+            <button
+              type="button"
+              className={scheduleUi.mode === "window_count" ? "schedule-mode active" : "schedule-mode"}
+              onClick={() => setScheduleUi({ ...scheduleUi, mode: "window_count" })}
+            >
+              <strong>Chạy đủ số lần</strong>
+              <span>Trong khung giờ</span>
+            </button>
+            <button
+              type="button"
+              className={scheduleUi.mode === "fixed_interval" ? "schedule-mode active" : "schedule-mode"}
+              onClick={() => setScheduleUi({ ...scheduleUi, mode: "fixed_interval" })}
+            >
+              <strong>Lặp lại</strong>
+              <span>Sau mỗi khoảng thời gian</span>
+            </button>
+            <button
+              type="button"
+              className={scheduleUi.mode === "daily_times" ? "schedule-mode active" : "schedule-mode"}
+              onClick={() => setScheduleUi({ ...scheduleUi, mode: "daily_times" })}
+            >
+              <strong>Giờ cố định</strong>
+              <span>Chạy đúng mốc HH:mm</span>
+            </button>
           </div>
+
+          {scheduleUi.mode === "window_count" && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Từ giờ</label>
+                  <input type="time" value={scheduleUi.startTime} onChange={(e) => setScheduleUi({ ...scheduleUi, startTime: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Đến giờ</label>
+                  <input type="time" value={scheduleUi.endTime} onChange={(e) => setScheduleUi({ ...scheduleUi, endTime: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Số lần chạy thành công</label>
+                  <input type="number" min={1} value={scheduleUi.runsPerProfile} onChange={(e) => setScheduleUi({ ...scheduleUi, runsPerProfile: parseInt(e.target.value) || 1 })} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Khoảng delay tối thiểu (phút)</label>
+                  <input type="number" min={1} value={scheduleUi.minGap} onChange={(e) => setScheduleUi({ ...scheduleUi, minGap: parseInt(e.target.value) || 1 })} />
+                </div>
+                <div className="form-group">
+                  <label>Khoảng delay tối đa (phút)</label>
+                  <input type="number" min={1} value={scheduleUi.maxGap} onChange={(e) => setScheduleUi({ ...scheduleUi, maxGap: parseInt(e.target.value) || 1 })} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {scheduleUi.mode === "fixed_interval" && (
+            <div className="form-row">
+              <div className="form-group">
+                <label>Lặp lại mỗi</label>
+                <input type="number" min={1} value={scheduleUi.intervalValue} onChange={(e) => setScheduleUi({ ...scheduleUi, intervalValue: parseInt(e.target.value) || 1 })} />
+              </div>
+              <div className="form-group">
+                <label>Đơn vị</label>
+                <select value={scheduleUi.intervalUnit} onChange={(e) => setScheduleUi({ ...scheduleUi, intervalUnit: e.target.value as "minutes" | "hours" })}>
+                  <option value="minutes">phút</option>
+                  <option value="hours">giờ</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {scheduleUi.mode === "daily_times" && (
+            <div className="form-group">
+              <label>Mốc giờ chạy (mỗi dòng một giờ HH:mm)</label>
+              <textarea rows={5} value={scheduleUi.timesText} onChange={(e) => setScheduleUi({ ...scheduleUi, timesText: e.target.value })} />
+            </div>
+          )}
+
           <div className="form-group">
-            <label>Random JSON</label>
-            <textarea
-              rows={8}
-              value={form.random_json}
-              onChange={(e) =>
-                setForm({ ...form, random_json: e.target.value })
-              }
-            />
+            <label>Ngày chạy</label>
+            <div className="day-picker">
+              {dayLabels.map((label, index) => {
+                const day = index + 1;
+                const active = scheduleUi.activeDays.includes(day);
+                return (
+                  <button
+                    key={day}
+                    type="button"
+                    className={active ? "active" : ""}
+                    onClick={() =>
+                      setScheduleUi({
+                        ...scheduleUi,
+                        activeDays: active
+                          ? scheduleUi.activeDays.filter((d) => d !== day)
+                          : [...scheduleUi.activeDays, day].sort(),
+                      })
+                    }
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          <p className="text-muted">{getSchedulePreview(scheduleUi)}</p>
         </div>
         <div className="form-row">
           <div className="form-group">
@@ -344,13 +608,36 @@ export default function JobsPage({
             />
           </div>
         </div>
+        <div className="form-group">
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowJsonPreview(!showJsonPreview)}>
+            {showJsonPreview ? "Hide" : "Show"} JSON Preview
+          </button>
+          {showJsonPreview && (
+            <div className="form-row" style={{ marginTop: 8 }}>
+              <textarea rows={8} readOnly value={JSON.stringify(selectedProfiles, null, 2)} />
+              <textarea rows={8} readOnly value={scheduleToJson(scheduleUi)} />
+            </div>
+          )}
+        </div>
         <div className="flex-row">
           <button
             className="btn btn-primary"
             onClick={handleSubmit}
-            disabled={loading || !form.name || !form.script_id}
+            disabled={loading || !form.name || !form.script_id || selectedProfiles.length === 0}
           >
             {editId ? "Update" : "Create"}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              setEditId(null);
+              setForm(emptyInput);
+              setSelectedProfiles([]);
+              setScheduleUi(defaultScheduleUi);
+              setDefaultInputs([]);
+            }}
+          >
+            Clear
           </button>
           {editId && (
             <button
@@ -358,6 +645,8 @@ export default function JobsPage({
               onClick={() => {
                 setEditId(null);
                 setForm(emptyInput);
+                setSelectedProfiles([]);
+                setScheduleUi(defaultScheduleUi);
                 setDefaultInputs([]);
               }}
             >
