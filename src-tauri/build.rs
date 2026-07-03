@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
-    let source_icon = manifest_dir.join("..").join("docs").join("icon.png");
+    let source_icon = manifest_dir.join("icons").join("generated").join("128x128.png");
     let out_dir = manifest_dir.join("icons").join("generated");
 
     fs::create_dir_all(&out_dir).expect("failed to create generated icon dir");
