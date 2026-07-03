@@ -1,6 +1,6 @@
 [package]
 name = "donu-scheduler"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 
 [lib]
@@ -24,9 +24,10 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "blocking"], default-features = false }
 dirs = "6"
 rfd = "0.15"
+sha2 = "0.10"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 libc = "0.2"

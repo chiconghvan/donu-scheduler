@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Script, ScriptInput } from "../types";
 import * as api from "../api";
+import { FloatingInput, FloatingSelect } from "./FloatingField";
 import { useDialog } from "./DialogHost";
 
 interface DefaultInput {
@@ -198,24 +199,30 @@ export default function ScriptsPage() {
   };
 
   return (
-    <div>
-      <h1>Scripts</h1>
+    <div className="page">
+      <div className="page-header">
+        <div className="page-title-block">
+          <h1>Scripts Dev</h1>
+          <div className="page-description">Local script registry and detected user inputs.</div>
+        </div>
+      </div>
 
-      <div className="card">
+      <div className="dev-layout">
+      <div className="panel scripts-editor">
         <h2>{editId ? "Edit Script" : "Add Script"}</h2>
         <div className="form-row">
           <div className="form-group">
-            <label>Name</label>
-            <input
+            <FloatingInput
+              label="Name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="My Script"
             />
           </div>
           <div className="form-group" style={{ flex: 2 }}>
-            <label>Script Path</label>
             <div className="flex-row">
-              <input
+              <FloatingInput
+                label="Script Path"
                 value={form.script_path}
                 onChange={(e) =>
                   setForm({ ...form, script_path: e.target.value })
@@ -234,8 +241,8 @@ export default function ScriptsPage() {
           </div>
         </div>
         <div className="form-group">
-          <label>Description</label>
-          <input
+          <FloatingInput
+            label="Description"
             value={form.description}
             onChange={(e) =>
               setForm({ ...form, description: e.target.value })
@@ -258,21 +265,12 @@ export default function ScriptsPage() {
           <div className="form-group">
             <label>Default Inputs (auto-detected from script)</label>
             {defaultInputs.map((input, idx) => (
-              <div key={input.name} style={{ marginBottom: 10 }}>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "#8899b0",
-                    marginBottom: 4,
-                  }}
-                >
-                  {input.name} — {input.comment}
-                </div>
+              <div key={input.name} className="script-input-row">
                 {input.inputType === "ComboBox" ? (
-                  <select
+                  <FloatingSelect
+                    label={`${input.name} — ${input.comment}`}
                     value={input.value}
                     onChange={(e) => handleDefaultInputChange(idx, e.target.value)}
-                    style={{ width: "100%" }}
                   >
                     <option value="">-- select --</option>
                     {input.comboboxData
@@ -284,10 +282,11 @@ export default function ScriptsPage() {
                           {item}
                         </option>
                       ))}
-                  </select>
+                  </FloatingSelect>
                 ) : input.inputType === "File" ? (
                   <div className="flex-row">
-                    <input
+                    <FloatingInput
+                      label={`${input.name} — ${input.comment}`}
                       value={input.value}
                       onChange={(e) => handleDefaultInputChange(idx, e.target.value)}
                       placeholder="select a file"
@@ -306,11 +305,11 @@ export default function ScriptsPage() {
                     </button>
                   </div>
                 ) : (
-                  <input
+                  <FloatingInput
+                    label={`${input.name} — ${input.comment}`}
                     value={input.value}
                     onChange={(e) => handleDefaultInputChange(idx, e.target.value)}
                     placeholder="default value"
-                    style={{ width: "100%" }}
                   />
                 )}
               </div>
@@ -334,12 +333,12 @@ export default function ScriptsPage() {
         </div>
       </div>
 
-      <div className="card">
-        <h2>Script List ({scripts.length})</h2>
+      <div className="panel table-panel scripts-registry">
+        <div className="panel-header"><h2>Script List ({scripts.length})</h2></div>
         {scripts.length === 0 ? (
-          <p className="text-muted">No scripts yet.</p>
+          <div className="empty-state"><div className="empty-state-inner"><div className="empty-icon">X</div><p className="text-muted">No scripts yet.</p></div></div>
         ) : (
-          <table>
+          <div className="table-wrap"><table>
             <thead>
               <tr>
                 <th>Name</th>
@@ -377,8 +376,9 @@ export default function ScriptsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
+      </div>
       </div>
     </div>
   );

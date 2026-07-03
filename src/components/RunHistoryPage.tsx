@@ -2,6 +2,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { RunHistoryItem } from "../types";
 import * as api from "../api";
 import { useDialog } from "./DialogHost";
+import LiveLogViewer from "./LiveLogViewer";
+import { FloatingInput, FloatingSelect } from "./FloatingField";
 
 interface HistoryTask {
   id: string;
@@ -90,11 +92,11 @@ export default function RunHistoryPage() {
   const dialog = useDialog();
   const [runs, setRuns] = useState<RunHistoryItem[]>([]);
   const [selectedRun, setSelectedRun] = useState<RunHistoryItem | null>(null);
-  const [log, setLog] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const logDialogRef = useRef<HTMLDialogElement>(null);
-  const logEndRef = useRef<HTMLDivElement>(null);
-  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
     try {
@@ -110,17 +112,6 @@ export default function RunHistoryPage() {
   }, []);
 
   useEffect(() => {
-    const container = logContainerRef.current;
-    if (container && logEndRef.current) {
-      const isNearBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight < 80;
-      if (isNearBottom) {
-        logEndRef.current.scrollIntoView({ behavior: "smooth" });
-      }
-    }
-  }, [log]);
-
-  useEffect(() => {
     const el = logDialogRef.current;
     if (!el) return;
 
@@ -134,7 +125,18 @@ export default function RunHistoryPage() {
     }
   }, [selectedRun]);
 
-  const tasks = groupHistory(runs);
+  const filteredRuns = runs.filter((run) => {
+    const q = search.trim().toLowerCase();
+    if (kindFilter !== "all" && run.kind !== kindFilter) return false;
+    if (statusFilter !== "all" && run.status !== statusFilter) return false;
+    if (!q) return true;
+    return [run.job_name, run.script_name, run.profile_name, run.profile_id, run.status, run.manager]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
+  const tasks = groupHistory(filteredRuns);
   const totalChildren = tasks.reduce((s, t) => s + t.children.length, 0);
 
   const toggle = (id: string) => {
@@ -160,128 +162,98 @@ export default function RunHistoryPage() {
     );
   };
 
-  const openLog = async (item: RunHistoryItem) => {
+  const openLog = (item: RunHistoryItem) => {
     setSelectedRun(item);
-    setLog("");
-    try {
-      const existingLog = await api.getRunHistoryLog(item.kind, item.id);
-      if (existingLog) setLog(existingLog);
-    } catch {
-      // ignore
-    }
   };
 
   const closeLog = () => {
     setSelectedRun(null);
-    setLog("");
   };
 
   const fmt = (value: string | null) => (value ? new Date(value).toLocaleString() : "-");
 
   return (
-    <div>
-      <h1>Run History</h1>
+    <div className="page">
+      <div className="page-header">
+        <div className="page-title-block">
+          <h1>Run History</h1>
+          <div className="page-description">Grouped manual and scheduled runs with log access.</div>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={load}>Refresh</button>
+      </div>
 
-      <div className="card">
-        <div className="flex-row" style={{ justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0 }}>All Runs ({totalChildren})</h2>
-          <button className="btn btn-secondary btn-sm" onClick={load}>
-            Refresh
-          </button>
+      <div className="panel table-panel">
+        <div className="panel-header">
+          <h2>All Runs ({totalChildren})</h2>
+          <div className="toolbar-actions">
+            <FloatingInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search runs" style={{ width: 220 }} />
+            <FloatingSelect value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} style={{ width: 130 }}>
+              <option value="all">All kinds</option>
+              <option value="job">Jobs</option>
+              <option value="test">Manual</option>
+            </FloatingSelect>
+            <FloatingSelect  value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 140 }}>
+              <option value="all">All statuses</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+              <option value="running">Running</option>
+              <option value="stopped">Stopped</option>
+            </FloatingSelect>
+          </div>
         </div>
 
         {tasks.length === 0 ? (
-          <p className="text-muted">No runs yet.</p>
+          <div className="empty-state"><div className="empty-state-inner"><div className="empty-icon">H</div><h2>No runs found</h2><p className="text-muted">History appears after manual runs or scheduled jobs finish.</p></div></div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th></th>
-                <th>Type</th>
-                <th>Task</th>
-                <th>Script</th>
-                <th>Runs</th>
-                <th>Status</th>
-                <th>Started</th>
-                <th>Finished</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((task) => (
-                <Fragment key={task.id}>
-                  <tr>
-                    <td>
-                      <button className="expand-button" onClick={() => toggle(task.id)}>
-                        {expanded.has(task.id) ? "▼" : "▶"}
-                      </button>
-                    </td>
-                    <td>{task.kind}</td>
-                    <td>{task.title}</td>
-                    <td>{task.script_name || task.script_id || "-"}</td>
-                    <td>{task.children.length}</td>
-                    <td>
-                      {task.children.length === 1 ? (
-                        <span className={`status-badge status-${task.children[0].status}`}>
-                          {task.children[0].status}
-                        </span>
-                      ) : (
-                        <span className="status-badge status-done">
-                          {task.children.filter((c) => c.status === "success").length}/
-                          {task.children.length}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ fontSize: 12 }}>{fmt(task.started_at)}</td>
-                    <td style={{ fontSize: 12 }}>{fmt(task.finished_at)}</td>
-                    <td>
-                      {task.children.length === 1 && (
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => openLog(task.children[0])}
-                        >
-                          Log
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  {expanded.has(task.id) &&
-                    task.children.map((child) => (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Type</th>
+                  <th>Task</th>
+                  <th>Script</th>
+                  <th>Runs</th>
+                  <th>Status</th>
+                  <th>Started</th>
+                  <th>Finished</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((task) => (
+                  <Fragment key={task.id}>
+                    <tr>
+                      <td><button className="expand-button" onClick={() => toggle(task.id)}>{expanded.has(task.id) ? "▼" : "▶"}</button></td>
+                      <td>{task.kind}</td>
+                      <td>{task.title}</td>
+                      <td>{task.script_name || task.script_id || "-"}</td>
+                      <td>{task.children.length}</td>
+                      <td>{task.children.length === 1 ? <span className={`status-badge status-${task.children[0].status}`}>{task.children[0].status}</span> : <span className="status-badge status-done">{task.children.filter((c) => c.status === "success").length}/{task.children.length}</span>}</td>
+                      <td className="mono text-muted">{fmt(task.started_at)}</td>
+                      <td className="mono text-muted">{fmt(task.finished_at)}</td>
+                      <td>{task.children.length === 1 && <button className="btn btn-secondary btn-sm" onClick={() => openLog(task.children[0])}>Log</button>}</td>
+                    </tr>
+                    {expanded.has(task.id) && task.children.map((child) => (
                       <tr key={`${child.kind}-${child.id}`} className="history-child-row">
                         <td></td>
-                        <td colSpan={2}>
-                          <span style={{ display: "inline-flex", alignItems: "center" }}>
-                            {getProfileLabel(child)}
-                          </span>
-                        </td>
-                        <td style={{ fontFamily: "monospace", fontSize: 11, color: "#8899b0" }}>
-                          PID {child.pid ?? "-"}
-                        </td>
-                        <td>
-                          <span className={`status-badge status-${child.status}`}>{child.status}</span>
-                        </td>
-                        <td style={{ fontSize: 12 }}>{fmt(child.started_at)}</td>
-                        <td style={{ fontSize: 12 }}>{fmt(child.finished_at)}</td>
+                        <td colSpan={2}>{getProfileLabel(child)}</td>
+                        <td className="mono">PID {child.pid ?? "-"}</td>
+                        <td><span className={`status-badge status-${child.status}`}>{child.status}</span></td>
+                        <td className="mono">{fmt(child.started_at)}</td>
+                        <td className="mono">{fmt(child.finished_at)}</td>
                         <td>{child.exit_code ?? "-"}</td>
                         <td>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => openLog(child)}
-                          >
-                            Log
-                          </button>
-                          {child.error_message && (
-                            <span style={{ marginLeft: 6, fontSize: 11, color: "#e95d5d" }}>
-                              {child.error_message}
-                            </span>
-                          )}
+                          <button className="btn btn-secondary btn-sm" onClick={() => openLog(child)}>Log</button>
+                          {child.error_message && <span style={{ marginLeft: 6, fontSize: 11, color: "var(--destructive)" }}>{child.error_message}</span>}
                         </td>
                       </tr>
                     ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -303,10 +275,12 @@ export default function RunHistoryPage() {
                 Close
               </button>
             </div>
-            <div className="run-history-log-box" ref={logContainerRef}>
-              <pre className="run-history-log-text">{log || "(loading...)"}</pre>
-              <div ref={logEndRef} />
-            </div>
+            <LiveLogViewer
+              kind={selectedRun.kind === "job" ? "job" : "test"}
+              runId={selectedRun.id}
+              running={["queued", "pending", "running"].includes(selectedRun.status)}
+              className="run-history-log-box"
+            />
           </div>
         )}
       </dialog>

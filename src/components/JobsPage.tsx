@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Script, JobDefinition, JobInput, SelectedJobProfile } from "../types";
 import * as api from "../api";
 import { useDialog } from "./DialogHost";
+import { FloatingInput, FloatingSelect } from "./FloatingField";
 import ProfilePickerDialog from "./ProfilePickerDialog";
 
 interface DefaultInput {
@@ -205,6 +206,8 @@ export default function JobsPage({
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   const [scheduleUi, setScheduleUi] = useState<ScheduleUiState>(defaultScheduleUi);
   const [showJsonPreview, setShowJsonPreview] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [inspectorMode, setInspectorMode] = useState<"view" | "create" | "edit">("view");
 
   const load = async () => {
     try {
@@ -278,6 +281,7 @@ export default function JobsPage({
       setScheduleUi(defaultScheduleUi);
       setDefaultInputs([]);
       setEditId(null);
+      setInspectorMode("view");
       await load();
     } catch (e: unknown) {
       await dialog.showError(String(e));
@@ -303,6 +307,8 @@ export default function JobsPage({
   };
 
   const handleEdit = (j: JobDefinition) => {
+    setSelectedJobId(j.id);
+    setInspectorMode("edit");
     setEditId(j.id);
     setForm({
       name: j.name,
@@ -341,9 +347,29 @@ export default function JobsPage({
     return s ? s.name : id.slice(0, 8);
   };
 
+  const selectedJob = jobs.find((job) => job.id === selectedJobId) || jobs[0] || null;
+  const startCreate = () => {
+    setSelectedJobId(null);
+    setInspectorMode("create");
+    setEditId(null);
+    setForm(emptyInput);
+    setSelectedProfiles([]);
+    setScheduleUi(defaultScheduleUi);
+    setDefaultInputs([]);
+  };
+
   return (
-    <div>
-      <h1>Jobs</h1>
+    <div className="page">
+      <div className="page-header">
+        <div className="page-title-block">
+          <h1>Jobs</h1>
+          <div className="page-description">Create schedules, assign profiles, and monitor job definitions.</div>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-secondary btn-sm" onClick={load}>Refresh</button>
+          <button className="btn btn-primary btn-sm" onClick={startCreate}>+ New Job</button>
+        </div>
+      </div>
       <ProfilePickerDialog
         open={profilePickerOpen}
         selected={selectedProfiles}
@@ -354,20 +380,43 @@ export default function JobsPage({
         onCancel={() => setProfilePickerOpen(false)}
       />
 
-      <div className="card">
-        <h2>{editId ? "Edit Job" : "Add Job"}</h2>
+      <div className="jobs-layout">
+      <div className="panel inspector jobs-inspector">
+        <h2>{inspectorMode === "view" ? "Inspector" : editId ? "Edit Job" : "New Job"}</h2>
+        {inspectorMode === "view" && selectedJob ? (
+          <>
+            <div className="form-section">
+              <h2>{selectedJob.name}</h2>
+              <p className="text-muted">{selectedJob.description || "No description."}</p>
+              <div className="flex-row" style={{ justifyContent: "space-between" }}><span>Status</span><span className={`status-badge ${selectedJob.enabled ? "status-success" : "status-pending"}`}>{selectedJob.enabled ? "Enabled" : "Disabled"}</span></div>
+              <div className="flex-row" style={{ justifyContent: "space-between" }}><span>Script</span><span>{getScriptName(selectedJob.script_id)}</span></div>
+              <div className="flex-row" style={{ justifyContent: "space-between" }}><span>Profiles</span><span>{parseSelectedProfiles(selectedJob.profile_ids_json).length}</span></div>
+              <div className="flex-row" style={{ justifyContent: "space-between" }}><span>Timeout</span><span>{selectedJob.timeout_seconds}s</span></div>
+            </div>
+            <div className="form-section">
+              <h3>Schedule</h3>
+              <p className="text-muted">{getSchedulePreview(jsonToSchedule(selectedJob.schedule_json, selectedJob.random_json))}</p>
+            </div>
+            <div className="page-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => onOpenDetail(selectedJob.id)}>Detail</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => handleEdit(selectedJob)}>Edit</button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selectedJob.id)}>Delete</button>
+            </div>
+          </>
+        ) : (
+          <>
         <div className="form-row">
           <div className="form-group">
-            <label>Name</label>
-            <input
+            <FloatingInput
+              label="Name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Daily Post Job"
             />
           </div>
           <div className="form-group">
-            <label>Script</label>
-            <select
+            <FloatingSelect
+              label="Script"
               value={form.script_id}
               onChange={(e) =>
                 setForm({ ...form, script_id: e.target.value })
@@ -379,12 +428,12 @@ export default function JobsPage({
                   {s.name}
                 </option>
               ))}
-            </select>
+            </FloatingSelect>
           </div>
         </div>
         <div className="form-group">
-          <label>Description</label>
-          <input
+          <FloatingInput
+            label="Description"
             value={form.description}
             onChange={(e) =>
               setForm({ ...form, description: e.target.value })
@@ -396,22 +445,12 @@ export default function JobsPage({
           <div className="form-group">
             <label>Script Inputs (from selected script)</label>
             {defaultInputs.map((input, idx) => (
-              <div key={input.name} className="flex-row" style={{ marginBottom: 6 }}>
-                <span
-                  style={{
-                    minWidth: 200,
-                    fontSize: 13,
-                    color: "#8899b0",
-                    lineHeight: "32px",
-                  }}
-                >
-                  {input.name} — {input.comment}
-                </span>
+              <div key={input.name} className="script-input-row">
                 {input.inputType === "ComboBox" ? (
-                  <select
+                  <FloatingSelect
+                    label={`${input.name} — ${input.comment}`}
                     value={input.value}
                     onChange={(e) => handleDefaultInputChange(idx, e.target.value)}
-                    style={{ flex: 1 }}
                   >
                     <option value="">-- select --</option>
                     {input.comboboxData
@@ -423,10 +462,11 @@ export default function JobsPage({
                           {item}
                         </option>
                       ))}
-                  </select>
+                  </FloatingSelect>
                 ) : input.inputType === "File" ? (
-                  <div className="flex-row" style={{ flex: 1 }}>
-                    <input
+                  <div className="flex-row">
+                    <FloatingInput
+                      label={`${input.name} — ${input.comment}`}
                       value={input.value}
                       onChange={(e) => handleDefaultInputChange(idx, e.target.value)}
                       placeholder="select a file"
@@ -445,11 +485,11 @@ export default function JobsPage({
                     </button>
                   </div>
                 ) : (
-                  <input
+                  <FloatingInput
+                    label={`${input.name} — ${input.comment}`}
                     value={input.value}
                     onChange={(e) => handleDefaultInputChange(idx, e.target.value)}
                     placeholder="enter value"
-                    style={{ flex: 1 }}
                   />
                 )}
               </div>
@@ -457,7 +497,7 @@ export default function JobsPage({
           </div>
         )}
 
-        <div className="card" style={{ background: "#0f1a30" }}>
+        <div className="form-section">
           <h3>Profiles</h3>
           <div className="flex-row">
             <button className="btn btn-secondary" onClick={() => setProfilePickerOpen(true)}>
@@ -473,7 +513,7 @@ export default function JobsPage({
           )}
         </div>
 
-        <div className="card" style={{ background: "#0f1a30" }}>
+        <div className="form-section">
           <h3>Schedule</h3>
           <div className="schedule-mode-grid">
             <button
@@ -506,26 +546,21 @@ export default function JobsPage({
             <>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Từ giờ</label>
-                  <input type="time" value={scheduleUi.startTime} onChange={(e) => setScheduleUi({ ...scheduleUi, startTime: e.target.value })} />
+                  <FloatingInput label="Từ giờ" type="time" value={scheduleUi.startTime} onChange={(e) => setScheduleUi({ ...scheduleUi, startTime: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label>Đến giờ</label>
-                  <input type="time" value={scheduleUi.endTime} onChange={(e) => setScheduleUi({ ...scheduleUi, endTime: e.target.value })} />
+                  <FloatingInput label="Đến giờ" type="time" value={scheduleUi.endTime} onChange={(e) => setScheduleUi({ ...scheduleUi, endTime: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label>Số lần chạy thành công</label>
-                  <input type="number" min={1} value={scheduleUi.runsPerProfile} onChange={(e) => setScheduleUi({ ...scheduleUi, runsPerProfile: parseInt(e.target.value) || 1 })} />
+                  <FloatingInput label="Số lần chạy thành công" type="number" min={1} value={scheduleUi.runsPerProfile} onChange={(e) => setScheduleUi({ ...scheduleUi, runsPerProfile: parseInt(e.target.value) || 1 })} />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Khoảng delay tối thiểu (phút)</label>
-                  <input type="number" min={1} value={scheduleUi.minGap} onChange={(e) => setScheduleUi({ ...scheduleUi, minGap: parseInt(e.target.value) || 1 })} />
+                  <FloatingInput label="Khoảng delay tối thiểu (phút)" type="number" min={1} value={scheduleUi.minGap} onChange={(e) => setScheduleUi({ ...scheduleUi, minGap: parseInt(e.target.value) || 1 })} />
                 </div>
                 <div className="form-group">
-                  <label>Khoảng delay tối đa (phút)</label>
-                  <input type="number" min={1} value={scheduleUi.maxGap} onChange={(e) => setScheduleUi({ ...scheduleUi, maxGap: parseInt(e.target.value) || 1 })} />
+                  <FloatingInput label="Khoảng delay tối đa (phút)" type="number" min={1} value={scheduleUi.maxGap} onChange={(e) => setScheduleUi({ ...scheduleUi, maxGap: parseInt(e.target.value) || 1 })} />
                 </div>
               </div>
             </>
@@ -534,15 +569,13 @@ export default function JobsPage({
           {scheduleUi.mode === "fixed_interval" && (
             <div className="form-row">
               <div className="form-group">
-                <label>Lặp lại mỗi</label>
-                <input type="number" min={1} value={scheduleUi.intervalValue} onChange={(e) => setScheduleUi({ ...scheduleUi, intervalValue: parseInt(e.target.value) || 1 })} />
+                <FloatingInput label="Lặp lại mỗi" type="number" min={1} value={scheduleUi.intervalValue} onChange={(e) => setScheduleUi({ ...scheduleUi, intervalValue: parseInt(e.target.value) || 1 })} />
               </div>
               <div className="form-group">
-                <label>Đơn vị</label>
-                <select value={scheduleUi.intervalUnit} onChange={(e) => setScheduleUi({ ...scheduleUi, intervalUnit: e.target.value as "minutes" | "hours" })}>
+                <FloatingSelect label="Đơn vị" value={scheduleUi.intervalUnit} onChange={(e) => setScheduleUi({ ...scheduleUi, intervalUnit: e.target.value as "minutes" | "hours" })}>
                   <option value="minutes">phút</option>
                   <option value="hours">giờ</option>
-                </select>
+                </FloatingSelect>
               </div>
             </div>
           )}
@@ -595,8 +628,8 @@ export default function JobsPage({
             />
           </div>
           <div className="form-group">
-            <label>Timeout (seconds)</label>
-            <input
+            <FloatingInput
+              label="Timeout (seconds)"
               type="number"
               value={form.timeout_seconds}
               onChange={(e) =>
@@ -654,14 +687,16 @@ export default function JobsPage({
             </button>
           )}
         </div>
+          </>
+        )}
       </div>
 
-      <div className="card">
-        <h2>Job List ({jobs.length})</h2>
+      <div className="panel table-panel jobs-list">
+        <div className="panel-header"><h2>Job List ({jobs.length})</h2></div>
         {jobs.length === 0 ? (
-          <p className="text-muted">No jobs yet.</p>
+          <div className="empty-state"><div className="empty-state-inner"><div className="empty-icon">J</div><p className="text-muted">No jobs yet.</p></div></div>
         ) : (
-          <table>
+          <div className="table-wrap"><table>
             <thead>
               <tr>
                 <th>Name</th>
@@ -674,15 +709,15 @@ export default function JobsPage({
             </thead>
             <tbody>
               {jobs.map((j) => (
-                <tr key={j.id}>
+                <tr key={j.id} className={(selectedJob?.id === j.id && inspectorMode === "view") ? "selected-row" : ""} onClick={() => { setSelectedJobId(j.id); setInspectorMode("view"); }} style={{ cursor: "pointer" }}>
                   <td>{j.name}</td>
                   <td>{getScriptName(j.script_id)}</td>
                   <td>
-                    <label className="toggle">
+                    <label className="toggle" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={!!j.enabled}
-                        onChange={() => handleToggle(j)}
+                        onChange={(e) => { e.stopPropagation(); handleToggle(j); }}
                       />
                       <span className="slider"></span>
                     </label>
@@ -693,19 +728,19 @@ export default function JobsPage({
                     <div className="flex-row">
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={() => onOpenDetail(j.id)}
+                        onClick={(e) => { e.stopPropagation(); onOpenDetail(j.id); }}
                       >
                         Detail
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
-                        onClick={() => handleEdit(j)}
+                        onClick={(e) => { e.stopPropagation(); handleEdit(j); }}
                       >
                         Edit
                       </button>
                       <button
                         className="btn btn-danger btn-sm"
-                        onClick={() => handleDelete(j.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(j.id); }}
                       >
                         Delete
                       </button>
@@ -714,8 +749,9 @@ export default function JobsPage({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
+      </div>
       </div>
     </div>
   );

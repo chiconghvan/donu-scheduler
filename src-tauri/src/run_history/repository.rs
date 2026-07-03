@@ -101,6 +101,11 @@ pub fn list_run_history(db_path: &PathBuf) -> Result<Vec<RunHistoryItem>, String
 }
 
 pub fn get_run_history_log(db_path: &PathBuf, kind: &str, run_id: &str) -> Result<String, String> {
+    let log_path = get_log_path(db_path, kind, run_id)?;
+    std::fs::read_to_string(&log_path).map_err(|e| format!("Failed to read log file {log_path}: {e}"))
+}
+
+pub fn get_log_path(db_path: &PathBuf, kind: &str, run_id: &str) -> Result<String, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let log_path: Option<String> = if kind == "job" {
         conn.query_row(
@@ -118,6 +123,5 @@ pub fn get_run_history_log(db_path: &PathBuf, kind: &str, run_id: &str) -> Resul
         .ok()
     };
 
-    let log_path = log_path.ok_or_else(|| format!("Log path not found for run: {run_id}"))?;
-    std::fs::read_to_string(&log_path).map_err(|e| format!("Failed to read log file {log_path}: {e}"))
+    log_path.ok_or_else(|| format!("Log path not found for run: {run_id}"))
 }

@@ -13,6 +13,11 @@ import type {
   RunningTask,
   InputCache,
   RunHistoryItem,
+  LogEntry,
+  RuntimeStatus,
+  ScriptStoreCatalog,
+  ScriptStoreInstallResult,
+  ScriptStoreUpdateApplied,
 } from "./types";
 
 export async function listScripts(): Promise<Script[]> {
@@ -90,6 +95,10 @@ export async function updateRuntime(): Promise<void> {
   return invoke("update_runtime");
 }
 
+export async function getRuntimeStatus(): Promise<RuntimeStatus> {
+  return invoke("get_runtime_status");
+}
+
 export async function runScriptTest(
   scriptId: string,
   profileId: string,
@@ -160,6 +169,15 @@ export async function getRunHistoryLog(
   return invoke("get_run_history_log", { kind, runId });
 }
 
+export async function getRunLogTail(
+  kind: string,
+  runId: string,
+  afterSeq: number | null,
+  maxLines: number
+): Promise<LogEntry[]> {
+  return invoke("get_run_log_tail", { kind, runId, afterSeq, maxLines });
+}
+
 export async function stopTestRun(runId: string): Promise<void> {
   return invoke("stop_test_run", { runId });
 }
@@ -209,4 +227,28 @@ export async function saveInputCache(
     cliArgs,
     defaultInputsJson,
   });
+}
+
+export async function scriptStoreHasToken(): Promise<boolean> {
+  return invoke("script_store_has_token");
+}
+
+export async function scriptStoreSaveToken(token: string): Promise<void> {
+  return invoke("script_store_save_token", { token });
+}
+
+export async function listScriptStore(): Promise<ScriptStoreCatalog> {
+  return invoke("script_store_list");
+}
+
+export async function installScriptStore(scriptId: string): Promise<ScriptStoreInstallResult> {
+  return invoke("script_store_install", { scriptId });
+}
+
+export async function updateScriptStore(scriptId: string): Promise<ScriptStoreInstallResult> {
+  return invoke("script_store_update", { scriptId });
+}
+
+export async function applyPendingScriptStoreUpdates(): Promise<ScriptStoreUpdateApplied[]> {
+  return invoke("script_store_apply_pending_updates");
 }

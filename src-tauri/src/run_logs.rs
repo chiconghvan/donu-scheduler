@@ -1,9 +1,41 @@
+use serde::Serialize;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
-const LOG_RETENTION_HOURS: i64 = 24;
-const MAX_LOG_LINES: usize = 500;
+pub const MAX_LOG_LINES: usize = 2000;
+
+#[derive(Clone, Serialize)]
+pub struct LogEntry {
+    pub run_id: String,
+    pub seq: u64,
+    pub ts: String,
+    pub source: String,
+    pub line: String,
+}
+
+#[derive(Default)]
+pub struct LogRegistry {
+    runs: HashMap<String, RunLogBuffer>,
+}
+
+struct RunLogBuffer {
+    next_seq: u64,
+    lines: VecDeque<LogEntry>,
+    log_path: Option<String>,
+}
+
+impl Default for RunLogBuffer {
+    fn default() -> Self {
+        Self {
+            next_seq: 1,
+            lines: VecDeque::new(),
+            log_path: None,
+        }
+    }
+}
 
 pub fn prepare_log_path(
     script_path: &str,
@@ -33,70 +65,196 @@ pub fn prepare_log_path(
 }
 
 pub fn cleanup_old_logs() -> Result<(), String> {
-    let logs_dir = get_logs_dir();
-    if !logs_dir.exists() {
-        return Ok(());
-    }
-
-    let cutoff = std::time::SystemTime::now()
-        .checked_sub(std::time::Duration::from_secs((LOG_RETENTION_HOURS * 3600) as u64))
-        .ok_or_else(|| "Failed to compute log retention cutoff".to_string())?;
-
-    let entries = fs::read_dir(&logs_dir).map_err(|e| format!("Failed to read logs dir: {e}"))?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) != Some("txt") {
-            continue;
-        }
-
-        let should_delete = entry
-            .metadata()
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .map(|modified| modified < cutoff)
-            .unwrap_or(false);
-
-        if should_delete {
-            let _ = fs::remove_file(path);
-        }
-    }
-
-    Ok(())
-}
-
-pub fn write_log_file(
-    log_path: &str,
-    header: &[String],
-    lines: &[String],
-    footer: Option<String>,
-) -> Result<(), String> {
-    let path = Path::new(log_path);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create log parent dir: {e}"))?;
-    }
-
-    let mut file = fs::File::create(path).map_err(|e| format!("Failed to write log file: {e}"))?;
-    for line in header {
-        writeln!(file, "{line}").map_err(|e| format!("Failed to write log file: {e}"))?;
-    }
-    for line in lines.iter().rev().take(MAX_LOG_LINES).collect::<Vec<_>>().into_iter().rev() {
-        writeln!(file, "{line}").map_err(|e| format!("Failed to write log file: {e}"))?;
-    }
-    if let Some(footer) = footer {
-        writeln!(file, "{footer}").map_err(|e| format!("Failed to write log file: {e}"))?;
-    }
     Ok(())
 }
 
 pub fn append_spawn_error(log_path: &str, message: &str) {
-    let _ = fs::write(log_path, message);
+    if let Some(parent) = Path::new(log_path).parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(log_path, strip_ansi_escape(message));
+}
+
+pub fn init_live_run(
+    registry: &Arc<Mutex<LogRegistry>>,
+    run_id: &str,
+    log_path: Option<String>,
+) -> Result<(), String> {
+    let mut registry = registry.lock().map_err(|e| e.to_string())?;
+    let buffer = registry
+        .runs
+        .entry(run_id.to_string())
+        .or_insert_with(RunLogBuffer::default);
+    buffer.log_path = log_path;
+    Ok(())
+}
+
+pub fn append_live_entry(
+    registry: &Arc<Mutex<LogRegistry>>,
+    run_id: &str,
+    source: &str,
+    line: &str,
+    log_path: Option<&str>,
+) -> Result<LogEntry, String> {
+    let (entry, effective_log_path) = {
+        let mut registry = registry.lock().map_err(|e| e.to_string())?;
+        let buffer = registry
+            .runs
+            .entry(run_id.to_string())
+            .or_insert_with(RunLogBuffer::default);
+        if let Some(path) = log_path {
+            buffer.log_path = Some(path.to_string());
+        }
+
+        let entry = LogEntry {
+            run_id: run_id.to_string(),
+            seq: buffer.next_seq,
+            ts: crate::models::now_iso(),
+            source: source.to_string(),
+            line: strip_ansi_escape(line),
+        };
+        buffer.next_seq += 1;
+        buffer.lines.push_back(entry.clone());
+        while buffer.lines.len() > MAX_LOG_LINES {
+            buffer.lines.pop_front();
+        }
+        (entry, buffer.log_path.clone())
+    };
+
+    if let Some(path) = effective_log_path {
+        append_entry_to_file(&path, &entry)?;
+    }
+
+    Ok(entry)
+}
+
+pub fn get_live_tail(
+    registry: &Arc<Mutex<LogRegistry>>,
+    run_id: &str,
+    after_seq: Option<u64>,
+    max_lines: Option<usize>,
+) -> Result<Option<Vec<LogEntry>>, String> {
+    let registry = registry.lock().map_err(|e| e.to_string())?;
+    let Some(buffer) = registry.runs.get(run_id) else {
+        return Ok(None);
+    };
+
+    let limit = max_lines.unwrap_or(MAX_LOG_LINES).min(MAX_LOG_LINES);
+    let mut entries: Vec<LogEntry> = buffer
+        .lines
+        .iter()
+        .filter(|entry| after_seq.map(|seq| entry.seq > seq).unwrap_or(true))
+        .cloned()
+        .collect();
+    if entries.len() > limit {
+        entries = entries[entries.len() - limit..].to_vec();
+    }
+    Ok(Some(entries))
+}
+
+pub fn tail_log_file(
+    run_id: &str,
+    log_path: &str,
+    after_seq: Option<u64>,
+    max_lines: Option<usize>,
+) -> Result<Vec<LogEntry>, String> {
+    let content = fs::read_to_string(log_path)
+        .map_err(|e| format!("Failed to read log file {log_path}: {e}"))?;
+    let limit = max_lines.unwrap_or(MAX_LOG_LINES).min(MAX_LOG_LINES);
+    let mut fallback_seq = 1_u64;
+    let mut entries = Vec::new();
+
+    for raw in content.lines() {
+        let entry = parse_log_line(run_id, raw, fallback_seq);
+        fallback_seq = fallback_seq.max(entry.seq + 1);
+        if after_seq.map(|seq| entry.seq > seq).unwrap_or(true) {
+            entries.push(entry);
+        }
+    }
+
+    if entries.len() > limit {
+        entries = entries[entries.len() - limit..].to_vec();
+    }
+
+    Ok(entries)
+}
+
+fn append_entry_to_file(log_path: &str, entry: &LogEntry) -> Result<(), String> {
+    let path = Path::new(log_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create log parent dir: {e}"))?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|e| format!("Failed to append log file: {e}"))?;
+    writeln!(
+        file,
+        "[{}] [{:06}] [{}] {}",
+        entry.ts, entry.seq, entry.source, entry.line
+    )
+    .map_err(|e| format!("Failed to append log file: {e}"))?;
+    Ok(())
+}
+
+fn parse_log_line(run_id: &str, raw: &str, fallback_seq: u64) -> LogEntry {
+    if let Some(rest) = raw.strip_prefix('[') {
+        if let Some((ts, rest)) = rest.split_once("] [") {
+            if let Some((seq_text, rest)) = rest.split_once("] [") {
+                if let Some((source, line)) = rest.split_once("] ") {
+                    if let Ok(seq) = seq_text.parse::<u64>() {
+                        return LogEntry {
+                            run_id: run_id.to_string(),
+                            seq,
+                            ts: ts.to_string(),
+                            source: source.to_string(),
+                            line: strip_ansi_escape(line),
+                        };
+                    }
+                }
+            }
+        }
+    }
+
+    LogEntry {
+        run_id: run_id.to_string(),
+        seq: fallback_seq,
+        ts: String::new(),
+        source: "raw".to_string(),
+        line: strip_ansi_escape(raw),
+    }
+}
+
+fn strip_ansi_escape(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\u{1b}' {
+            if matches!(chars.peek(), Some('[')) {
+                let _ = chars.next();
+                while let Some(&next) = chars.peek() {
+                    if next.is_ascii_alphabetic() {
+                        let _ = chars.next();
+                        break;
+                    }
+                    let _ = chars.next();
+                }
+                continue;
+            }
+            continue;
+        }
+        out.push(ch);
+    }
+
+    out
 }
 
 fn get_logs_dir() -> PathBuf {
-    dirs::cache_dir()
-        .unwrap_or_else(|| dirs::data_local_dir().unwrap_or_else(|| PathBuf::from(".")))
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
         .join("DonuScheduler")
-        .join("temp")
         .join("logs")
 }
 

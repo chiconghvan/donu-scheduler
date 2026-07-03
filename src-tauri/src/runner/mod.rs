@@ -7,6 +7,8 @@ use tauri::Emitter;
 #[derive(Clone, Serialize)]
 pub struct LogEventPayload {
     pub run_id: String,
+    pub seq: u64,
+    pub ts: String,
     pub line: String,
     pub source: String,
 }
@@ -114,32 +116,40 @@ pub async fn wait_runtime(
     spawned: SpawnedProcess,
     run_id: String,
     app_handle: tauri::AppHandle,
+    log_registry: Arc<Mutex<crate::run_logs::LogRegistry>>,
 ) -> RunnerOutcome {
     let mut child = spawned.child;
 
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
+    let log_path = spawned.log_path.clone();
+    let _ = crate::run_logs::init_live_run(&log_registry, &run_id, log_path.clone());
+
+    emit_log_entry(
+        &app_handle,
+        &log_registry,
+        &run_id,
+        "runner",
+        spawned.log_prefix.trim_end(),
+        log_path.as_deref(),
+    );
+
     let run_id_clone = run_id.clone();
     let app_clone = app_handle.clone();
-    let log_lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-    let stdout_lines = Arc::clone(&log_lines);
-    let stderr_lines = Arc::clone(&log_lines);
-
+    let log_registry_clone = Arc::clone(&log_registry);
+    let log_path_clone = log_path.clone();
     let stdout_task = tokio::spawn(async move {
         if let Some(stdout) = stdout {
             let mut lines = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                if let Ok(mut buf) = stdout_lines.lock() {
-                    buf.push(format!("[stdout] {line}"));
-                }
-                let _ = app_clone.emit(
-                    "log-stream",
-                    LogEventPayload {
-                        run_id: run_id_clone.clone(),
-                        line,
-                        source: "stdout".to_string(),
-                    },
+                emit_log_entry(
+                    &app_clone,
+                    &log_registry_clone,
+                    &run_id_clone,
+                    "stdout",
+                    &line,
+                    log_path_clone.as_deref(),
                 );
             }
         }
@@ -147,48 +157,41 @@ pub async fn wait_runtime(
 
     let run_id_clone2 = run_id.clone();
     let app_clone2 = app_handle.clone();
+    let log_registry_clone2 = Arc::clone(&log_registry);
+    let log_path_clone2 = log_path.clone();
 
-    // Spawn stderr reader
     let stderr_task = tokio::spawn(async move {
         if let Some(stderr) = stderr {
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                if let Ok(mut buf) = stderr_lines.lock() {
-                    buf.push(format!("[stderr] {line}"));
-                }
-                let _ = app_clone2.emit(
-                    "log-stream",
-                    LogEventPayload {
-                        run_id: run_id_clone2.clone(),
-                        line,
-                        source: "stderr".to_string(),
-                    },
+                emit_log_entry(
+                    &app_clone2,
+                    &log_registry_clone2,
+                    &run_id_clone2,
+                    "stderr",
+                    &line,
+                    log_path_clone2.as_deref(),
                 );
             }
         }
     });
 
-    // Wait for both readers to finish
+    let result = child.wait().await;
     let _ = stdout_task.await;
     let _ = stderr_task.await;
-
-    // Wait for process to exit
-    let result = child.wait().await;
 
     match result {
         Ok(status) => {
             let exit_code = status.code();
             let success = status.success();
-
-            if let Some(log_path) = spawned.log_path.as_deref() {
-                let header = vec![
-                    format!("[runner] Run id: {run_id}"),
-                    spawned.log_prefix.clone(),
-                    format!("[runner] Process exited with code: {exit_code:?}"),
-                ];
-                let lines = log_lines.lock().map(|buf| buf.clone()).unwrap_or_default();
-                let _ = crate::run_logs::write_log_file(log_path, &header, &lines, None);
-            }
+            emit_log_entry(
+                &app_handle,
+                &log_registry,
+                &run_id,
+                "runner",
+                &format!("Process exited with code: {exit_code:?}"),
+                log_path.as_deref(),
+            );
 
             RunnerOutcome {
                 success,
@@ -198,15 +201,53 @@ pub async fn wait_runtime(
                 } else {
                     None
                 },
-                log_path: spawned.log_path,
+                log_path,
             }
         }
-        Err(e) => RunnerOutcome {
-            success: false,
-            exit_code: None,
-            error_message: Some(format!("Failed to run runtime: {e}")),
-            log_path: spawned.log_path,
-        },
+        Err(e) => {
+            emit_log_entry(
+                &app_handle,
+                &log_registry,
+                &run_id,
+                "runner",
+                &format!("Failed to run runtime: {e}"),
+                log_path.as_deref(),
+            );
+            RunnerOutcome {
+                success: false,
+                exit_code: None,
+                error_message: Some(format!("Failed to run runtime: {e}")),
+                log_path,
+            }
+        }
+    }
+}
+
+fn emit_log_entry(
+    app_handle: &tauri::AppHandle,
+    log_registry: &Arc<Mutex<crate::run_logs::LogRegistry>>,
+    run_id: &str,
+    source: &str,
+    line: &str,
+    log_path: Option<&str>,
+) {
+    if let Ok(entry) = crate::run_logs::append_live_entry(
+        log_registry,
+        run_id,
+        source,
+        line,
+        log_path,
+    ) {
+        let _ = app_handle.emit(
+            "log-stream",
+            LogEventPayload {
+                run_id: entry.run_id,
+                seq: entry.seq,
+                ts: entry.ts,
+                line: entry.line,
+                source: entry.source,
+            },
+        );
     }
 }
 

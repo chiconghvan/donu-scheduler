@@ -81,6 +81,7 @@ pub async fn run_script_test(
     let run_id_clone = run_id.clone();
     let run_id_for_registry = run_id.clone();
     let registry = Arc::clone(&state.process_registry);
+    let log_registry = Arc::clone(&state.log_registry);
     let semaphore = Arc::clone(&state.run_semaphore);
 
     tokio::spawn(async move {
@@ -111,7 +112,7 @@ pub async fn run_script_test(
                         Some(pid),
                     );
                 }
-                runner::wait_runtime(spawned, run_id_clone.clone(), app_handle).await
+                runner::wait_runtime(spawned, run_id_clone.clone(), app_handle, log_registry).await
             }
             Err(outcome) => outcome,
         };
@@ -242,6 +243,7 @@ pub async fn run_batch_test(
         let run_id_clone = run_id.clone();
         let run_id_for_registry = run_id.clone();
         let registry = Arc::clone(&state.process_registry);
+        let log_registry = Arc::clone(&state.log_registry);
         let semaphore = Arc::clone(&state.run_semaphore);
         let app_handle_clone = app_handle.clone();
 
@@ -273,7 +275,7 @@ pub async fn run_batch_test(
                             Some(pid),
                         );
                     }
-                    runner::wait_runtime(spawned, run_id_clone.clone(), app_handle_clone).await
+                    runner::wait_runtime(spawned, run_id_clone.clone(), app_handle_clone, log_registry).await
                 }
                 Err(outcome) => outcome,
             };

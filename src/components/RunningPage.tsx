@@ -52,88 +52,101 @@ export default function RunningPage() {
 
   const fmt = (value: string | null) => (value ? new Date(value).toLocaleString() : "-");
 
+  const totalProfiles = tasks.reduce((sum, task) => sum + task.profile_count, 0);
+  const totalRunning = tasks.reduce((sum, task) => sum + task.running_count, 0);
+  const totalQueued = tasks.reduce((sum, task) => sum + task.queued_count, 0);
+  const totalScheduled = tasks.reduce((sum, task) => sum + task.scheduled_count, 0);
+
   return (
-    <div>
-      <h1>Running</h1>
-      <div className="card">
-        <div className="flex-row" style={{ justifyContent: "space-between" }}>
-          <h2 style={{ margin: 0 }}>Active Tasks ({tasks.length})</h2>
-          <button className="btn btn-secondary btn-sm" onClick={load}>Refresh</button>
+    <div className="page">
+      <div className="page-header">
+        <div className="page-title-block">
+          <h1>Running</h1>
+          <div className="page-description">Live scheduler and manual-run process monitor. Auto refresh every 3 seconds.</div>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="metric-grid">
+        <div className="metric-card"><div className="metric-label">Tasks</div><div className="metric-value">{tasks.length}</div><div className="metric-note">active groups</div></div>
+        <div className="metric-card"><div className="metric-label">Profiles</div><div className="metric-value">{totalProfiles}</div><div className="metric-note">in tasks</div></div>
+        <div className="metric-card"><div className="metric-label">Running</div><div className="metric-value">{totalRunning}</div><div className="metric-note">processes</div></div>
+        <div className="metric-card"><div className="metric-label">Queued</div><div className="metric-value">{totalQueued + totalScheduled}</div><div className="metric-note">{totalQueued} queued, {totalScheduled} scheduled</div></div>
+      </div>
+
+      <div className="panel table-panel">
+        <div className="panel-header">
+          <h2>Active Tasks</h2>
+          <span className="text-muted">{tasks.length} tasks</span>
         </div>
         {tasks.length === 0 ? (
-          <p className="text-muted">No running tasks.</p>
+          <div className="empty-state"><div className="empty-state-inner"><div className="empty-icon">P</div><h2>No running tasks</h2><p className="text-muted">Manual runs and scheduled jobs will appear here.</p></div></div>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th></th>
-                <th>Type</th>
-                <th>Task</th>
-                <th>Script</th>
-                <th>Status</th>
-                <th>Profiles</th>
-                <th>Running</th>
-                <th>Queued</th>
-                <th>Scheduled</th>
-                <th>Started</th>
-                <th>Next Run</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map((task) => (
-                <Fragment key={task.id}>
-                  <tr key={task.id}>
-                    <td>
-                      <button className="expand-button" onClick={() => toggle(task.id)}>
-                        {expanded.has(task.id) ? "▼" : "▶"}
-                      </button>
-                    </td>
-                    <td>{task.kind}</td>
-                    <td>{task.title}</td>
-                    <td>{task.script_name || task.script_id || "-"}</td>
-                    <td><span className={`status-badge status-${task.status}`}>{task.status}</span></td>
-                    <td>{task.profile_count}</td>
-                    <td>{task.running_count}</td>
-                    <td>{task.queued_count}</td>
-                    <td>{task.scheduled_count}</td>
-                    <td>{fmt(task.started_at)}</td>
-                    <td>{fmt(task.next_run_at)}</td>
-                    <td>
-                      <div className="flex-row">
-                        {task.kind === "job" ? (
-                          <>
-                            <button className="btn btn-danger btn-sm" onClick={() => stopTask(task, "stop_running")}>Stop Running</button>
-                            <button className="btn btn-danger btn-sm" onClick={() => stopTask(task, "stop_job")}>Stop Job</button>
-                          </>
-                        ) : (
-                          <button className="btn btn-danger btn-sm" onClick={() => stopTask(task)}>Stop Task</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {expanded.has(task.id) && task.children.map((child) => (
-                    <tr key={`${task.id}-${child.id}`} className="running-child-row">
-                      <td></td>
-                      <td>profile</td>
-                      <td>{child.profile_name}</td>
-                      <td>{child.manager || "-"}</td>
-                      <td><span className={`status-badge status-${child.status}`}>{child.status}</span></td>
-                      <td colSpan={2}>{child.pid ?? "-"}</td>
-                      <td>{fmt(child.started_at)}</td>
-                      <td>{fmt(child.next_run_at)}</td>
-                      <td colSpan={2}>{child.error_message || ""}</td>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Type</th>
+                  <th>Task</th>
+                  <th>Script</th>
+                  <th>Status</th>
+                  <th>Profiles</th>
+                  <th>Running</th>
+                  <th>Queued</th>
+                  <th>Scheduled</th>
+                  <th>Started</th>
+                  <th>Next Run</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.map((task) => (
+                  <Fragment key={task.id}>
+                    <tr key={task.id}>
+                      <td><button className="expand-button" onClick={() => toggle(task.id)}>{expanded.has(task.id) ? "▼" : "▶"}</button></td>
+                      <td>{task.kind}</td>
+                      <td>{task.title}</td>
+                      <td>{task.script_name || task.script_id || "-"}</td>
+                      <td><span className={`status-badge status-${task.status}`}>{task.status}</span></td>
+                      <td>{task.profile_count}</td>
+                      <td>{task.running_count}</td>
+                      <td>{task.queued_count}</td>
+                      <td>{task.scheduled_count}</td>
+                      <td className="mono text-muted">{fmt(task.started_at)}</td>
+                      <td className="mono text-muted">{fmt(task.next_run_at)}</td>
                       <td>
-                        {child.status === "running" && (
-                          <button className="btn btn-danger btn-sm" onClick={() => stopChild(task, child.run_id)}>Stop</button>
-                        )}
+                        <div className="flex-row">
+                          {task.kind === "job" ? (
+                            <>
+                              <button className="btn btn-danger btn-sm" onClick={() => stopTask(task, "stop_running")}>Stop Running</button>
+                              <button className="btn btn-danger btn-sm" onClick={() => stopTask(task, "stop_job")}>Stop Job</button>
+                            </>
+                          ) : (
+                            <button className="btn btn-danger btn-sm" onClick={() => stopTask(task)}>Stop Task</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                    {expanded.has(task.id) && task.children.map((child) => (
+                      <tr key={`${task.id}-${child.id}`} className="running-child-row">
+                        <td></td>
+                        <td>profile</td>
+                        <td>{child.profile_name}</td>
+                        <td>{child.manager || "-"}</td>
+                        <td><span className={`status-badge status-${child.status}`}>{child.status}</span></td>
+                        <td colSpan={2}>PID {child.pid ?? "-"}</td>
+                        <td className="mono">{fmt(child.started_at)}</td>
+                        <td className="mono">{fmt(child.next_run_at)}</td>
+                        <td colSpan={2}>{child.error_message || ""}</td>
+                        <td>{child.status === "running" && <button className="btn btn-danger btn-sm" onClick={() => stopChild(task, child.run_id)}>Stop</button>}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

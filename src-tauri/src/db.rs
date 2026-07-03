@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result as SqlResult};
+use crate::run_logs::LogRegistry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -6,6 +7,7 @@ use std::sync::{Arc, Mutex};
 pub struct AppState {
     pub db_path: Mutex<PathBuf>,
     pub process_registry: Arc<Mutex<HashMap<String, u32>>>,
+    pub log_registry: Arc<Mutex<LogRegistry>>,
     pub run_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
@@ -262,6 +264,96 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
 
     if !has_job_group_name_col {
         conn.execute_batch("ALTER TABLE job_runs ADD COLUMN group_name TEXT;")?;
+    }
+
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS script_store_installs (
+            store_script_id TEXT PRIMARY KEY,
+            script_db_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            version TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            runtime TEXT NOT NULL,
+            source_owner TEXT NOT NULL,
+            source_repo TEXT NOT NULL,
+            source_tag TEXT NOT NULL,
+            asset_name TEXT NOT NULL,
+            installed_path TEXT NOT NULL,
+            pending_path TEXT,
+            pending_version TEXT,
+            pending_sha256 TEXT,
+            pending_source_tag TEXT,
+            pending_asset_name TEXT,
+            installed_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+        ",
+    )?;
+
+    let has_store_pending_path: bool = conn
+        .prepare("PRAGMA table_info(script_store_installs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_path"))
+        })
+        .unwrap_or(false);
+    if !has_store_pending_path {
+        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_path TEXT;")?;
+    }
+
+    let has_store_pending_version: bool = conn
+        .prepare("PRAGMA table_info(script_store_installs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_version"))
+        })
+        .unwrap_or(false);
+    if !has_store_pending_version {
+        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_version TEXT;")?;
+    }
+
+    let has_store_pending_sha256: bool = conn
+        .prepare("PRAGMA table_info(script_store_installs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_sha256"))
+        })
+        .unwrap_or(false);
+    if !has_store_pending_sha256 {
+        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_sha256 TEXT;")?;
+    }
+
+    let has_store_pending_source_tag: bool = conn
+        .prepare("PRAGMA table_info(script_store_installs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_source_tag"))
+        })
+        .unwrap_or(false);
+    if !has_store_pending_source_tag {
+        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_source_tag TEXT;")?;
+    }
+
+    let has_store_pending_asset_name: bool = conn
+        .prepare("PRAGMA table_info(script_store_installs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_asset_name"))
+        })
+        .unwrap_or(false);
+    if !has_store_pending_asset_name {
+        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_asset_name TEXT;")?;
     }
 
     // Migration: create input_cache table if not exists

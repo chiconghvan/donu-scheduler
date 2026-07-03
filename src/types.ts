@@ -9,6 +9,58 @@ export interface Script {
   updated_at: string;
 }
 
+export interface ScriptStoreScript {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  runtime: string;
+  entry: string;
+  path: string;
+  sha256: string;
+  min_app_version: string;
+  deprecated: boolean;
+  updated_at: string;
+  installed: boolean;
+  installed_version: string | null;
+  installed_sha256: string | null;
+  update_available: boolean;
+  pending_update: boolean;
+  source_tag: string | null;
+  asset_name: string | null;
+}
+
+export interface ScriptStoreCatalog {
+  store_version: string;
+  scripts: ScriptStoreScript[];
+}
+
+export interface ScriptStoreInstallResult {
+  script_id: string;
+  script_name: string;
+  version: string;
+  path: string;
+}
+
+export interface ScriptStoreUpdateApplied {
+  script_id: string;
+  script_name: string;
+  version: string;
+}
+
+export interface ScriptStoreUpdateAvailablePayload {
+  script_id: string;
+  name: string;
+  current_version: string;
+  latest_version: string;
+}
+
+export interface ScriptStoreUpdateSuccessPayload {
+  script_id: string;
+  name: string;
+  version: string;
+}
+
 export interface ScriptInput {
   name: string;
   description: string;
@@ -120,6 +172,14 @@ export interface RunningProcess {
   error_message: string | null;
 }
 
+export interface LogEntry {
+  run_id: string;
+  seq: number;
+  ts: string;
+  source: "stdout" | "stderr" | "runner" | "raw";
+  line: string;
+}
+
 export interface RunningTask {
   id: string;
   kind: string;
@@ -151,6 +211,13 @@ export interface RuntimeDownloadStartedPayload {
   asset_name: string;
 }
 
+export interface RuntimeDownloadProgressPayload {
+  version: string;
+  asset_name: string;
+  downloaded_bytes: number;
+  total_bytes: number | null;
+}
+
 export interface RuntimeUpdateAvailablePayload {
   current_version: string;
   latest_version: string;
@@ -164,6 +231,17 @@ export interface RuntimeUpdateSuccessPayload {
 
 export interface RuntimeUpdateErrorPayload {
   message: string;
+}
+
+export interface RuntimeStatus {
+  installed_version: string;
+  installed_asset_name: string;
+  downloaded_at: string;
+  pending_version: string | null;
+  pending_asset_name: string | null;
+  latest_version: string | null;
+  latest_asset_name: string | null;
+  update_available: boolean;
 }
 
 export interface ProfileSummary {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ManagerKey, ProfileSummary, SelectedJobProfile } from "../types";
 import * as api from "../api";
+import { FloatingInput } from "./FloatingField";
 
 const managers: { key: ManagerKey; label: string }[] = [
   { key: "gpm", label: "GPMLogin" },
@@ -28,6 +29,8 @@ export default function ProfilePickerDialog({ open, selected, onDone, onCancel }
   const [leftSelection, setLeftSelection] = useState<Set<string>>(new Set());
   const [rightSelection, setRightSelection] = useState<Set<string>>(new Set());
   const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [leftSearch, setLeftSearch] = useState("");
+  const [rightSearch, setRightSearch] = useState("");
   const [managerStatus, setManagerStatus] = useState({
     gpm: { online: true, error: "" },
     gpmglobal: { online: true, error: "" },
@@ -85,10 +88,14 @@ export default function ProfilePickerDialog({ open, selected, onDone, onCancel }
 
   const selectedKey = (manager: ManagerKey, id: string) => `${manager}:${id}`;
   const selectedKeys = new Set(draft.map((p) => selectedKey(p.manager, p.id)));
-  const leftProfiles = profilesByManager[leftTab].filter(
-    (p) => !selectedKeys.has(selectedKey(leftTab, p.id))
+  const leftProfiles = profilesByManager[leftTab].filter((p) =>
+    !selectedKeys.has(selectedKey(leftTab, p.id)) &&
+    [p.name, p.group_name].filter(Boolean).join(" ").toLowerCase().includes(leftSearch.trim().toLowerCase())
   );
-  const rightProfiles = draft.filter((p) => p.manager === rightTab);
+  const rightProfiles = draft.filter((p) =>
+    p.manager === rightTab &&
+    [p.name, p.group_name].filter(Boolean).join(" ").toLowerCase().includes(rightSearch.trim().toLowerCase())
+  );
   const leftStatus = managerStatus[leftTab];
   const rightStatus = managerStatus[rightTab];
 
@@ -131,6 +138,7 @@ export default function ProfilePickerDialog({ open, selected, onDone, onCancel }
           <div className="profile-picker-column">
             <h3>Available Profiles</h3>
             <ManagerTabs value={leftTab} status={managerStatus} onChange={(tab) => { setLeftTab(tab); setLeftSelection(new Set()); loadProfiles(tab); }} />
+            <FloatingInput label="Search available profiles" value={leftSearch} onChange={(e) => setLeftSearch(e.target.value)} placeholder="Search available profiles" />
             <div className="flex-row mb-8">
               <button className="btn btn-secondary btn-sm" onClick={() => loadProfiles(leftTab)} disabled={loadingProfiles}>
                 {loadingProfiles ? "Loading..." : "Refresh Profiles"}
@@ -178,6 +186,7 @@ export default function ProfilePickerDialog({ open, selected, onDone, onCancel }
           <div className="profile-picker-column">
             <h3>Job Profiles</h3>
             <ManagerTabs value={rightTab} status={managerStatus} onChange={(tab) => { setRightTab(tab); setRightSelection(new Set()); }} />
+            <FloatingInput label="Search selected profiles" value={rightSearch} onChange={(e) => setRightSearch(e.target.value)} placeholder="Search selected profiles" />
             <div className="flex-row mb-8">
               <span className="text-muted">{rightProfiles.length} selected in this manager</span>
               {!rightStatus.online && (

@@ -186,6 +186,79 @@ pub struct Settings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptStoreScript {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    pub runtime: String,
+    pub entry: String,
+    pub path: String,
+    pub sha256: String,
+    pub min_app_version: String,
+    pub deprecated: bool,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptStoreMetadata {
+    pub store_version: String,
+    pub scripts: Vec<ScriptStoreScript>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptStoreCatalogItem {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub version: String,
+    pub runtime: String,
+    pub entry: String,
+    pub path: String,
+    pub sha256: String,
+    pub min_app_version: String,
+    pub deprecated: bool,
+    pub updated_at: String,
+    pub installed: bool,
+    pub installed_version: Option<String>,
+    pub installed_sha256: Option<String>,
+    pub update_available: bool,
+    pub pending_update: bool,
+    pub source_tag: Option<String>,
+    pub asset_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptStoreCatalog {
+    pub store_version: String,
+    pub scripts: Vec<ScriptStoreCatalogItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptStoreInstallResult {
+    pub script_id: String,
+    pub script_name: String,
+    pub version: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptStoreUpdateApplied {
+    pub script_id: String,
+    pub script_name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptStoreUpdateSuccessPayload {
+    pub script_id: String,
+    pub name: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfileSummary {
     pub id: String,
     pub name: String,

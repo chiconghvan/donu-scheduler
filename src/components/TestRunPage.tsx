@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { listen } from "@tauri-apps/api/event";
 import type { Script, TestRun, ProfileSummary, Settings, ProfileSnapshot } from "../types";
 import * as api from "../api";
 import { useDialog } from "./DialogHost";
+import LiveLogViewer from "./LiveLogViewer";
+import { FloatingInput, FloatingSelect } from "./FloatingField";
 
 interface DefaultInput {
   name: string;
@@ -21,7 +22,6 @@ export default function TestRunPage() {
   const [cliArgs, setCliArgs] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [log, setLog] = useState("");
 
   const [managerTab, setManagerTab] = useState<"gpm" | "gpmglobal" | "donut">("gpm");
   const [gpmProfiles, setGpmProfiles] = useState<ProfileSummary[]>([]);
@@ -45,8 +45,6 @@ export default function TestRunPage() {
   const isMouseDown = useRef(false);
   const isDragging = useRef(false);
   const dragStartIndex = useRef<number | null>(null);
-  const logEndRef = useRef<HTMLDivElement>(null);
-  const logContainerRef = useRef<HTMLPreElement>(null);
 
   const load = async () => {
     try {
@@ -73,35 +71,6 @@ export default function TestRunPage() {
   useEffect(() => {
     load();
   }, []);
-
-  // Listen for real-time log stream events
-  useEffect(() => {
-    const unlisten = listen<{ run_id: string; line: string; source: string }>(
-      "log-stream",
-      (event) => {
-        const { run_id, line, source } = event.payload;
-        if (run_id === selectedRunId) {
-          const prefix = source === "stderr" ? "[stderr] " : "";
-          setLog((prev) => prev + prefix + line + "\n");
-        }
-      }
-    );
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [selectedRunId]);
-
-  // Auto-scroll log box only if user is already at/near the bottom
-  useEffect(() => {
-    const container = logContainerRef.current;
-    if (container && logEndRef.current) {
-      const isNearBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight < 80;
-      if (isNearBottom) {
-        logEndRef.current.scrollIntoView({ behavior: "smooth" });
-      }
-    }
-  }, [log]);
 
   // When script changes, try to load cached inputs, otherwise fall back to defaults
   useEffect(() => {
@@ -414,15 +383,33 @@ export default function TestRunPage() {
     }
   };
 
-  return (
-    <div>
-      <h1>Manual Run</h1>
+  const openTestRunLog = async (runId: string) => {
+    setSelectedRunId(runId);
+  };
 
-      <div className="card">
-        <h2>Run Configuration</h2>
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div className="page-title-block">
+          <h1>Manual Run</h1>
+          <div className="page-description">Launch one-off or batch script runs against selected profiles.</div>
+        </div>
+        <div className="page-actions">
+          <button className="btn btn-primary btn-sm" onClick={handleRun} disabled={loading || !scriptId || selectedProfiles.size === 0}>
+            {loading ? "Running..." : selectedProfiles.size > 1 ? `Run Batch (${selectedProfiles.size})` : "Run"}
+          </button>
+          {loading && selectedRunId && (
+            <button className="btn btn-danger btn-sm" onClick={() => { const run = testRuns.find((r) => r.id === selectedRunId); if (run?.batch_id) { handleStopBatch(run.batch_id); } else { handleStop(selectedRunId); } }}>Stop All</button>
+          )}
+        </div>
+      </div>
+
+      <div className="three-col-grid">
+      <div className="panel">
+        <h2>Script & Inputs</h2>
         <div className="form-group">
-          <label>Script</label>
-          <select
+          <FloatingSelect
+            label="Script"
             value={scriptId}
             onChange={(e) => setScriptId(e.target.value)}
           >
@@ -432,7 +419,7 @@ export default function TestRunPage() {
                 {s.name} ({s.script_path})
               </option>
             ))}
-          </select>
+          </FloatingSelect>
         </div>
 
         <div className="form-group">
@@ -451,26 +438,15 @@ export default function TestRunPage() {
             {defaultInputs.map((input, idx) => (
               <div
                 key={input.name}
-                className="flex-row"
-                style={{ marginBottom: 6 }}
+                className="script-input-row"
               >
-                <span
-                  style={{
-                    minWidth: 200,
-                    fontSize: 13,
-                    color: "#8899b0",
-                    lineHeight: "32px",
-                  }}
-                >
-                  {input.name} — {input.comment}
-                </span>
                 {input.inputType === "ComboBox" ? (
-                  <select
+                  <FloatingSelect
+                    label={`${input.name} — ${input.comment}`}
                     value={input.value}
                     onChange={(e) =>
                       handleDefaultInputChange(idx, e.target.value)
                     }
-                    style={{ flex: 1 }}
                   >
                     <option value="">-- select --</option>
                     {input.comboboxData
@@ -482,10 +458,11 @@ export default function TestRunPage() {
                           {item}
                         </option>
                       ))}
-                  </select>
+                  </FloatingSelect>
                 ) : input.inputType === "File" ? (
-                  <div className="flex-row" style={{ flex: 1 }}>
-                    <input
+                  <div className="flex-row">
+                    <FloatingInput
+                      label={`${input.name} — ${input.comment}`}
                       value={input.value}
                       onChange={(e) =>
                         handleDefaultInputChange(idx, e.target.value)
@@ -506,13 +483,13 @@ export default function TestRunPage() {
                     </button>
                   </div>
                 ) : (
-                  <input
+                  <FloatingInput
+                    label={`${input.name} — ${input.comment}`}
                     value={input.value}
                     onChange={(e) =>
                       handleDefaultInputChange(idx, e.target.value)
                     }
                     placeholder="enter value"
-                    style={{ flex: 1 }}
                   />
                 )}
               </div>
@@ -520,7 +497,9 @@ export default function TestRunPage() {
           </div>
         )}
 
-        <div className="card" style={{ background: "#0f1a30" }}>
+      </div>
+
+      <div className="panel table-panel">
           <h3>
             Profile Selection
             {selectedProfiles.size > 0 && (
@@ -694,45 +673,35 @@ export default function TestRunPage() {
           </p>
         </div>
 
-        <div className="flex-row">
-          <button
-            className="btn btn-primary"
-            onClick={handleRun}
-            disabled={loading || !scriptId || selectedProfiles.size === 0}
-          >
-            {loading
-              ? "Running..."
-              : selectedProfiles.size > 1
-                ? `Run Batch (${selectedProfiles.size})`
-                : "Run"}
-          </button>
-          {loading && selectedRunId && (
-            <button
-              className="btn btn-danger"
-              onClick={() => {
-                const run = testRuns.find((r) => r.id === selectedRunId);
-                if (run?.batch_id) {
-                  handleStopBatch(run.batch_id);
-                } else {
-                  handleStop(selectedRunId);
-                }
-              }}
-            >
-              Stop All
-            </button>
-          )}
-        </div>
-      </div>
-
-      {selectedRunId && (
-        <div className="card">
-          <h2>Log Output</h2>
-          <pre className="log-box" ref={logContainerRef}>
-            {log || "(loading...)"}
-            <div ref={logEndRef} />
-          </pre>
+      <div className="panel">
+        <div className="panel-header"><h2>Live / Recent</h2><span className="text-muted">{testRuns.length} runs</span></div>
+      {selectedRunId ? (
+        <>
+          <h3>Log Output</h3>
+          <LiveLogViewer
+            kind="test"
+            runId={selectedRunId}
+            running={testRuns.some((run) => run.id === selectedRunId && ["queued", "pending", "running"].includes(run.status))}
+          />
+        </>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Profile</th><th>Status</th><th>Started</th></tr></thead>
+            <tbody>
+              {testRuns.length === 0 ? <tr><td colSpan={3} className="text-muted">No manual runs yet.</td></tr> : testRuns.slice(0, 12).map((run) => (
+                <tr key={run.id} onClick={() => openTestRunLog(run.id)} style={{ cursor: "pointer" }}>
+                  <td>{run.profile_name || run.profile_id.slice(0, 10)}</td>
+                  <td><span className={`status-badge status-${run.status}`}>{run.status}</span></td>
+                  <td className="mono text-muted">{new Date(run.started_at).toLocaleTimeString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

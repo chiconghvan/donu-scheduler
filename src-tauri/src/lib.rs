@@ -8,6 +8,7 @@ mod runner;
 mod runtime_manager;
 mod running;
 mod run_history;
+mod script_store;
 mod scripts;
 mod settings;
 mod test_runs;
@@ -48,6 +49,7 @@ pub fn run() {
     let state = Arc::new(AppState {
         db_path: Mutex::new(db_path.clone()),
         process_registry: Arc::new(Mutex::new(HashMap::new())),
+        log_registry: Arc::new(Mutex::new(run_logs::LogRegistry::default())),
         run_semaphore: Arc::new(tokio::sync::Semaphore::new(max_parallel)),
     });
 
@@ -60,6 +62,7 @@ pub fn run() {
         .setup(move |app| {
             let state_handle = app.state::<Arc<AppState>>();
             let registry = Arc::clone(&state_handle.process_registry);
+            let log_registry = Arc::clone(&state_handle.log_registry);
             let app_handle = app.handle().clone();
             runtime_manager::spawn_runtime_manager(app_handle.clone(), Arc::clone(&registry));
             tauri::async_runtime::spawn(async move {
@@ -68,6 +71,7 @@ pub fn run() {
                     jobs::scheduler::scheduler_tick(
                         db_for_scheduler.clone(),
                         registry.clone(),
+                        log_registry.clone(),
                         app_handle.clone(),
                     )
                     .await;
@@ -137,6 +141,12 @@ pub fn run() {
             scripts::commands::delete_script,
             scripts::commands::open_file_dialog,
             scripts::commands::read_file_content,
+            script_store::commands::script_store_has_token,
+            script_store::commands::script_store_save_token,
+            script_store::commands::script_store_list,
+            script_store::commands::script_store_install,
+            script_store::commands::script_store_update,
+            script_store::commands::script_store_apply_pending_updates,
             jobs::commands::list_jobs,
             jobs::commands::get_job,
             jobs::commands::create_job,
@@ -159,11 +169,13 @@ pub fn run() {
             test_runs::commands::stop_batch_test_run,
             run_history::commands::list_run_history,
             run_history::commands::get_run_history_log,
+            run_history::commands::get_run_log_tail,
             profile_manager_cmds::list_gpm_profiles,
             profile_manager_cmds::list_donut_profiles,
             profile_manager_cmds::list_gpmglobal_profiles,
             input_cache::commands::get_input_cache,
             input_cache::commands::save_input_cache,
+            runtime_manager::get_runtime_status,
             runtime_manager::update_runtime,
         ])
         .run(tauri::generate_context!())

@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 pub async fn scheduler_tick(
     db_path: PathBuf,
     process_registry: Arc<Mutex<HashMap<String, u32>>>,
+    log_registry: Arc<Mutex<crate::run_logs::LogRegistry>>,
     app_handle: tauri::AppHandle,
 ) {
     // Reconcile stale "running" states: verify PID is still alive
@@ -22,7 +23,7 @@ pub async fn scheduler_tick(
     };
 
     for job in jobs {
-        if let Err(e) = process_job(&db_path, &job, &process_registry, &app_handle).await {
+        if let Err(e) = process_job(&db_path, &job, &process_registry, &log_registry, &app_handle).await {
             eprintln!("[scheduler] Error processing job {}: {e}", job.id);
         }
     }
@@ -96,6 +97,7 @@ async fn process_job(
     db_path: &PathBuf,
     job: &JobDefinition,
     process_registry: &Arc<Mutex<HashMap<String, u32>>>,
+    log_registry: &Arc<Mutex<crate::run_logs::LogRegistry>>,
     app_handle: &tauri::AppHandle,
 ) -> Result<(), String> {
     let profiles: Vec<JobProfileRef> = serde_json::from_str(&job.profile_ids_json)
@@ -265,6 +267,7 @@ async fn process_job(
 
         let run_id_for_registry = run_id.clone();
         let registry_clone = Arc::clone(process_registry);
+        let log_registry = Arc::clone(log_registry);
         let app_handle_clone = app_handle.clone();
 
         tokio::spawn(async move {
@@ -282,7 +285,7 @@ async fn process_job(
                             Some(pid),
                         );
                     }
-                    runner::wait_runtime(spawned, run_id_clone.clone(), app_handle_clone).await
+                    runner::wait_runtime(spawned, run_id_clone.clone(), app_handle_clone, log_registry).await
                 }
                 Err(outcome) => outcome,
             };

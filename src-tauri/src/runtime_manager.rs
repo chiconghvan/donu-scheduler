@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::sync::OnceLock;
 use tauri::{Emitter, Manager};
 
 const RELEASE_API_URL: &str = "https://api.github.com/repos/chiconghvan/donumate/releases/latest";
@@ -27,6 +28,14 @@ pub struct RuntimeDownloadStartedPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeDownloadProgressPayload {
+    pub version: String,
+    pub asset_name: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeUpdateAvailablePayload {
     pub current_version: String,
     pub latest_version: String,
@@ -42,6 +51,18 @@ pub struct RuntimeUpdateSuccessPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeUpdateErrorPayload {
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeStatus {
+    pub installed_version: String,
+    pub installed_asset_name: String,
+    pub downloaded_at: String,
+    pub pending_version: Option<String>,
+    pub pending_asset_name: Option<String>,
+    pub latest_version: Option<String>,
+    pub latest_asset_name: Option<String>,
+    pub update_available: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -61,6 +82,8 @@ struct RuntimeReleaseAsset {
     asset_name: String,
     download_url: String,
 }
+
+static LAST_RUNTIME_SUCCESS_VERSION: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 
 pub fn runtime_dir() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -108,6 +131,29 @@ pub async fn update_runtime(
 ) -> Result<(), String> {
     let asset = fetch_latest_runtime_asset().await?;
     install_runtime_asset(app_handle, Arc::clone(&state.process_registry), &asset, false).await
+}
+
+#[tauri::command]
+pub async fn get_runtime_status() -> Result<RuntimeStatus, String> {
+    let metadata = read_metadata().unwrap_or_default();
+    let latest_asset = fetch_latest_runtime_asset().await.ok();
+    let latest_version = latest_asset.as_ref().map(|asset| asset.version.clone());
+    let latest_asset_name = latest_asset.as_ref().map(|asset| asset.asset_name.clone());
+    let update_available = latest_version
+        .as_ref()
+        .map(|version| metadata.version.is_empty() || compare_versions(version, &metadata.version) == Ordering::Greater)
+        .unwrap_or(false);
+
+    Ok(RuntimeStatus {
+        installed_version: metadata.version,
+        installed_asset_name: metadata.asset_name,
+        downloaded_at: metadata.downloaded_at,
+        pending_version: metadata.pending_version,
+        pending_asset_name: metadata.pending_asset_name,
+        latest_version,
+        latest_asset_name,
+        update_available,
+    })
 }
 
 async fn ensure_runtime_on_startup(
@@ -166,9 +212,17 @@ async fn install_runtime_asset(
 ) -> Result<(), String> {
     std::fs::create_dir_all(runtime_dir()).map_err(|e| e.to_string())?;
 
+    let _ = app_handle.emit(
+        "runtime-download-started",
+        RuntimeDownloadStartedPayload {
+            version: asset.version.clone(),
+            asset_name: asset.asset_name.clone(),
+        },
+    );
+
     if !initial_install && is_runtime_running(&process_registry) {
         let cache_path = runtime_dir().join(&asset.asset_name);
-        download_file(&asset.download_url, &cache_path).await?;
+        download_file(Some(app_handle.clone()), asset, &cache_path).await?;
         let mut metadata = read_metadata().unwrap_or_default();
         metadata.pending_version = Some(asset.version.clone());
         metadata.pending_asset_name = Some(asset.asset_name.clone());
@@ -178,7 +232,7 @@ async fn install_runtime_asset(
     }
 
     let exe_path = runtime_exe_path();
-    download_file(&asset.download_url, &exe_path).await?;
+    download_file(Some(app_handle.clone()), asset, &exe_path).await?;
     write_metadata(&RuntimeMetadata {
         version: asset.version.clone(),
         asset_name: asset.asset_name.clone(),
@@ -263,25 +317,46 @@ async fn fetch_latest_runtime_asset() -> Result<RuntimeReleaseAsset, String> {
         .ok_or_else(|| "No donumate_v<version>.exe asset found in latest release".to_string())
 }
 
-async fn download_file(url: &str, target_path: &Path) -> Result<(), String> {
+async fn download_file(
+    app_handle: Option<tauri::AppHandle>,
+    asset: &RuntimeReleaseAsset,
+    target_path: &Path,
+) -> Result<(), String> {
     let temp_path = target_path.with_extension("download");
     if temp_path.exists() {
         std::fs::remove_file(&temp_path).map_err(|e| e.to_string())?;
     }
 
-    let bytes = reqwest::Client::new()
-        .get(url)
+    let mut response = reqwest::Client::new()
+        .get(&asset.download_url)
         .header(reqwest::header::USER_AGENT, "DonuScheduler")
         .send()
         .await
         .map_err(|e| e.to_string())?
         .error_for_status()
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .await
         .map_err(|e| e.to_string())?;
 
-    tokio::fs::write(&temp_path, bytes).await.map_err(|e| e.to_string())?;
+    let total_bytes = response.content_length();
+    let mut downloaded_bytes: u64 = 0;
+    let mut file = tokio::fs::File::create(&temp_path).await.map_err(|e| e.to_string())?;
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| e.to_string())?;
+        downloaded_bytes += chunk.len() as u64;
+        if let Some(app_handle) = &app_handle {
+            let _ = app_handle.emit(
+                "runtime-download-progress",
+                RuntimeDownloadProgressPayload {
+                    version: asset.version.clone(),
+                    asset_name: asset.asset_name.clone(),
+                    downloaded_bytes,
+                    total_bytes,
+                },
+            );
+        }
+    }
+
+    tokio::io::AsyncWriteExt::flush(&mut file).await.map_err(|e| e.to_string())?;
+
     if target_path.exists() {
         std::fs::remove_file(target_path).map_err(|e| e.to_string())?;
     }
@@ -350,6 +425,14 @@ fn is_runtime_running(process_registry: &Arc<Mutex<HashMap<String, u32>>>) -> bo
 }
 
 async fn emit_update_success(app_handle: tauri::AppHandle, version: String, asset_name: String) {
+    let lock = LAST_RUNTIME_SUCCESS_VERSION.get_or_init(|| Mutex::new(None));
+    if let Ok(mut last_version) = lock.lock() {
+        if last_version.as_deref() == Some(version.as_str()) {
+            return;
+        }
+        *last_version = Some(version.clone());
+    }
+
     let payload = RuntimeUpdateSuccessPayload { version, asset_name };
     let _ = app_handle.emit("runtime-update-success", payload);
 
