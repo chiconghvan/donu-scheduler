@@ -186,13 +186,13 @@ export default function RunHistoryPage() {
         <div className="panel-header">
           <h2>All Runs ({totalChildren})</h2>
           <div className="toolbar-actions">
-            <FloatingInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search runs" style={{ width: 220 }} />
-            <FloatingSelect value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} style={{ width: 130 }}>
+            <FloatingInput label="Search runs" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search runs" style={{ width: 220 }} />
+            <FloatingSelect label="Kind filter" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} style={{ width: 130 }}>
               <option value="all">All kinds</option>
               <option value="job">Jobs</option>
               <option value="test">Manual</option>
             </FloatingSelect>
-            <FloatingSelect  value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 140 }}>
+            <FloatingSelect label="Status filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 140 }}>
               <option value="all">All statuses</option>
               <option value="success">Success</option>
               <option value="failed">Failed</option>

@@ -150,8 +150,8 @@ export default function ScriptStorePage() {
         <div className="panel-header">
           <h2>Catalog ({visibleScripts.length})</h2>
           <div className="toolbar-actions">
-            <FloatingInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search script" style={{ width: 240 }} />
-            <FloatingSelect  value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={{ width: 130 }}>
+            <FloatingInput label="Search script" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search script" style={{ width: 240 }} />
+            <FloatingSelect label="State filter" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={{ width: 130 }}>
               <option value="all">All states</option>
               <option value="installed">Installed</option>
               <option value="updates">Updates</option>
