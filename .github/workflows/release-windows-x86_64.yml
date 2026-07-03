@@ -39,7 +39,12 @@ jobs:
         id: asset
         shell: pwsh
         run: |
-          $asset = Get-ChildItem -Path src-tauri\target\release\bundle -Recurse -File |
+          $bundleRoots = @(
+            'src-tauri\target\release\bundle',
+            'src-tauri\target\x86_64-pc-windows-msvc\release\bundle'
+          )
+          $asset = $bundleRoots |
+            ForEach-Object { Get-ChildItem -Path $_ -Recurse -File -ErrorAction SilentlyContinue } |
             Where-Object { $_.Extension -in '.exe', '.msi' } |
             Select-Object -First 1
           if (-not $asset) { throw 'No Windows installer asset found' }
