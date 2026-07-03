@@ -35,24 +35,38 @@ jobs:
       - name: Build Windows x86_64 release
         run: npm run tauri -- build --target x86_64-pc-windows-msvc
 
-      - name: Find asset
-        id: asset
+      - name: Find installer
+        id: installer
         shell: pwsh
         run: |
-          $bundleRoots = @(
-            'src-tauri\target\release\bundle',
-            'src-tauri\target\x86_64-pc-windows-msvc\release\bundle'
-          )
-          $asset = $bundleRoots |
-            ForEach-Object { Get-ChildItem -Path $_ -Recurse -File -ErrorAction SilentlyContinue } |
-            Where-Object { $_.Extension -in '.exe', '.msi' } |
+          $installer = Get-ChildItem -Path 'src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis' -Filter '*-setup.exe' -File -ErrorAction SilentlyContinue |
             Select-Object -First 1
-          if (-not $asset) { throw 'No Windows installer asset found' }
-          "path=$($asset.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "name=$($asset.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if (-not $installer) { throw 'No nsis setup asset found' }
+          "path=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "name=$($installer.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Create portable ZIP
+        id: portable
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $version = $tag.TrimStart('v')
+          $portableDir = Join-Path $PWD 'DonuScheduler-Portable'
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+
+          Copy-Item -Path 'src-tauri\target\x86_64-pc-windows-msvc\release\donu-scheduler.exe' -Destination (Join-Path $portableDir 'DonuScheduler.exe')
+          New-Item -ItemType File -Force -Path (Join-Path $portableDir '.portable') | Out-Null
+
+          $zipName = "DonuScheduler_${version}_x64-portable.zip"
+          if (Test-Path $zipName) { Remove-Item $zipName -Force }
+          Compress-Archive -Path (Join-Path $portableDir '*') -DestinationPath $zipName
+          "path=$((Resolve-Path $zipName).Path)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.asset.outputs.path }}
+          files: |
+            ${{ steps.installer.outputs.path }}
+            ${{ steps.portable.outputs.path }}
           generate_release_notes: true
