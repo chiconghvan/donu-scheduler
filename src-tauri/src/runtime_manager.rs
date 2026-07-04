@@ -130,6 +130,13 @@ pub async fn update_runtime(
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
     let asset = fetch_latest_runtime_asset().await?;
+    let metadata = read_metadata().unwrap_or_default();
+    if !metadata.version.is_empty()
+        && compare_versions(&asset.version, &metadata.version) != Ordering::Greater
+    {
+        return Ok(());
+    }
+
     install_runtime_asset(app_handle, Arc::clone(&state.process_registry), &asset, false).await
 }
 
@@ -407,21 +414,6 @@ fn is_runtime_running(process_registry: &Arc<Mutex<HashMap<String, u32>>>) -> bo
     if let Ok(registry) = process_registry.lock() {
         if registry.values().any(|pid| crate::runner::is_process_alive(*pid)) {
             return true;
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let output = std::process::Command::new("tasklist")
-            .args(["/FI", "IMAGENAME eq donumate.exe", "/NH"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-        if let Ok(output) = output {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
-            return stdout.contains("donumate.exe");
         }
     }
 

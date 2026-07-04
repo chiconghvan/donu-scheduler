@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.3 - 2026-07-04
+
+### Fixed
+- Skip redundant runtime download when already up to date
+- Disable "Update Now" button when no update is available
+- Remove redundant tasklist fallback in runtime process detection
+- Show toast feedback when clicking update with no pending version
+- Sync Cargo.lock version with package.json
+
 ## 0.2.0 - 2026-07-03
 
 ### Added

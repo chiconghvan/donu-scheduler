@@ -46,6 +46,10 @@ export default function SettingsPage() {
   }
 
   async function runUpdate() {
+    if (runtime && !runtime.update_available) {
+      addToast({ type: "success", title: "Runtime up to date", message: runtime.installed_version || undefined });
+      return;
+    }
     try {
       await updateRuntime();
       addToast({ type: "info", title: "Runtime update started" });
@@ -116,7 +120,7 @@ export default function SettingsPage() {
       </div>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><button className="btn btn--secondary" onClick={runUpdate}><RefreshCw size={14} /> Update Now</button></div>
+      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><button className="btn btn--secondary" onClick={runUpdate} disabled={runtime ? !runtime.update_available : true}><RefreshCw size={14} /> Update Now</button></div>
       {runtime ? <div className="form-grid">
         <div>Installed: <strong>{runtime.installed_version || "None"}</strong> {runtime.installed_asset_name}</div>
         <div>Latest: <strong>{runtime.latest_version || "Unknown"}</strong></div>
