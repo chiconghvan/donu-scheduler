@@ -1,3 +1,4 @@
+mod app_auto_updater;
 mod db;
 mod input_cache;
 mod jobs;
@@ -64,6 +65,7 @@ pub fn run() {
             let registry = Arc::clone(&state_handle.process_registry);
             let log_registry = Arc::clone(&state_handle.log_registry);
             let app_handle = app.handle().clone();
+            app_auto_updater::spawn_app_update_check(app_handle.clone(), Arc::clone(&state_handle));
             runtime_manager::spawn_runtime_manager(app_handle.clone(), Arc::clone(&registry));
             tauri::async_runtime::spawn(async move {
                 loop {
@@ -177,6 +179,11 @@ pub fn run() {
             input_cache::commands::save_input_cache,
             runtime_manager::get_runtime_status,
             runtime_manager::update_runtime,
+            app_auto_updater::get_app_version,
+            app_auto_updater::check_for_app_updates,
+            app_auto_updater::check_for_app_updates_manual,
+            app_auto_updater::download_and_prepare_app_update,
+            app_auto_updater::restart_application,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

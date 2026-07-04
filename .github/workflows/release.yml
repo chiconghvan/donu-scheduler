@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri app
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: npm run tauri build -- --target x86_64-pc-windows-msvc
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle -Recurse -Include *.exe,*.msi | ForEach-Object {
+            Copy-Item $_.FullName -Destination artifacts
+          }
+          $setup = Get-ChildItem -Path artifacts -Filter "*.exe" | Select-Object -First 1
+          if ($setup) {
+            $version = "${{ github.ref_name }}".TrimStart('v')
+            Copy-Item $setup.FullName -Destination "artifacts/DonuScheduler_${version}_x64-setup.exe" -Force
+          }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

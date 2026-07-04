@@ -204,6 +204,54 @@ export interface Settings {
   gpmglobal_api_base_url: string;
   donutbrowser_api_base_url: string;
   global_max_parallel_runtime: number;
+  disable_auto_updates: boolean;
+}
+
+export interface AppUpdateInfo {
+  current_version: string;
+  latest_version: string;
+  release_url: string;
+  asset_name: string;
+  download_url: string;
+  release_notes: string;
+  published_at: string;
+  manual_update_required: boolean;
+}
+
+export interface AppUpdatePrepareResult {
+  latest_version: string;
+  asset_name: string;
+  installer_path: string;
+  manual_update_required: boolean;
+}
+
+export interface AppUpdateAvailablePayload {
+  current_version: string;
+  latest_version: string;
+  asset_name: string;
+}
+
+export interface AppUpdateDownloadStartedPayload {
+  latest_version: string;
+  asset_name: string;
+}
+
+export interface AppUpdateDownloadProgressPayload {
+  latest_version: string;
+  asset_name: string;
+  downloaded_bytes: number;
+  total_bytes: number | null;
+}
+
+export interface AppUpdateReadyPayload {
+  latest_version: string;
+  asset_name: string;
+  installer_path: string;
+  manual_update_required: boolean;
+}
+
+export interface AppUpdateErrorPayload {
+  message: string;
 }
 
 export interface RuntimeDownloadStartedPayload {

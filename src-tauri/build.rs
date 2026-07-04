@@ -4,6 +4,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    inject_build_version();
+
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
     let source_icon = manifest_dir.join("icons").join("generated").join("128x128.png");
     let out_dir = manifest_dir.join("icons").join("generated");
@@ -12,6 +14,24 @@ fn main() {
     generate_icons(&source_icon, &out_dir).expect("failed to generate app icons");
 
     tauri_build::build();
+}
+
+fn inject_build_version() {
+    let package_version = env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.0.0".to_string());
+    let build_version = if let Ok(tag) = env::var("BUILD_TAG") {
+        tag
+    } else if let Ok(ref_name) = env::var("GITHUB_REF_NAME") {
+        ref_name
+    } else if env::var("STABLE_RELEASE").is_ok() {
+        format!("v{package_version}")
+    } else if let Ok(sha) = env::var("GITHUB_SHA") {
+        let short = sha.chars().take(7).collect::<String>();
+        format!("nightly-{short}")
+    } else {
+        format!("dev-{package_version}")
+    };
+
+    println!("cargo:rustc-env=BUILD_VERSION={build_version}");
 }
 
 fn generate_icons(source: &Path, out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {

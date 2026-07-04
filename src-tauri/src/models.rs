@@ -183,6 +183,7 @@ pub struct Settings {
     pub gpmglobal_api_base_url: String,
     pub donutbrowser_api_base_url: String,
     pub global_max_parallel_runtime: i32,
+    pub disable_auto_updates: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

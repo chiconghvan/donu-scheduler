@@ -8,6 +8,11 @@ import type {
   RuntimeUpdateAvailablePayload,
   RuntimeUpdateSuccessPayload,
   RuntimeUpdateErrorPayload,
+  AppUpdateAvailablePayload,
+  AppUpdateDownloadStartedPayload,
+  AppUpdateDownloadProgressPayload,
+  AppUpdateReadyPayload,
+  AppUpdateErrorPayload,
   ScriptStoreUpdateAvailablePayload,
   ScriptStoreUpdateSuccessPayload,
 } from "../../types";
@@ -54,6 +59,7 @@ export default function RuntimeToastHost() {
         action: {
           label: "Update",
           onClick: () => {
+            if (!window.confirm(`Download and install runtime update ${latest_version}?`)) return;
             api.updateRuntime().catch(() => {
               addToast({
                 type: "error",
@@ -93,6 +99,7 @@ export default function RuntimeToastHost() {
         action: {
           label: "Update",
           onClick: () => {
+            if (!window.confirm(`Update script ${event.payload.name} to ${event.payload.latest_version}?`)) return;
             api.updateScriptStore(event.payload.script_id).catch(() => {
               addToast({
                 type: "error",
@@ -110,6 +117,62 @@ export default function RuntimeToastHost() {
         type: "success",
         title: "Script updated",
         message: `${event.payload.name} updated to ${event.payload.version}.`,
+        duration: 10000,
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<AppUpdateAvailablePayload>("app-update-available", (event) => {
+      addToast({
+        type: "info",
+        title: "App update available",
+        message: `${event.payload.current_version} -> ${event.payload.latest_version} (${event.payload.asset_name})`,
+        duration: 0,
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<AppUpdateDownloadStartedPayload>("app-update-download-started", (event) => {
+      addToast({
+        type: "info",
+        title: "App update download",
+        message: `Downloading ${event.payload.asset_name} (${event.payload.latest_version})...`,
+        duration: 0,
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<AppUpdateDownloadProgressPayload>("app-update-download-progress", (event) => {
+      const { asset_name, downloaded_bytes, total_bytes } = event.payload;
+      const percent = total_bytes && total_bytes > 0 ? Math.min(100, Math.floor((downloaded_bytes / total_bytes) * 100)) : null;
+      addToast({
+        type: "info",
+        title: "App update download",
+        message: percent !== null ? `Downloading ${asset_name}... ${percent}%` : `Downloading ${asset_name}... ${downloaded_bytes} bytes`,
+        duration: 0,
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<AppUpdateReadyPayload>("app-update-ready", (event) => {
+      addToast({
+        type: "success",
+        title: "App update ready",
+        message: `${event.payload.asset_name} downloaded. Restart to install.`,
+        duration: 0,
+        action: {
+          label: "Install",
+          onClick: () => {
+            if (!window.confirm(`Install app update ${event.payload.latest_version} and restart now?`)) return;
+            api.restartApplication(event.payload.installer_path).catch(() => {
+              addToast({ type: "error", title: "App restart failed", duration: 10000 });
+            });
+          },
+        },
+      });
+    }).then((u) => unlisteners.push(u));
+
+    listen<AppUpdateErrorPayload>("app-update-error", (event) => {
+      addToast({
+        type: "error",
+        title: "App update error",
+        message: event.payload.message,
         duration: 10000,
       });
     }).then((u) => unlisteners.push(u));

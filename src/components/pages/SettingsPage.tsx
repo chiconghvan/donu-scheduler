@@ -1,22 +1,28 @@
 import { useEffect, useState } from "react";
-import { Cpu, RefreshCw, Save, Settings as SettingsIcon } from "lucide-react";
-import { getRuntimeStatus, getSettings, updateRuntime, updateSettings } from "../../api";
-import type { RuntimeStatus, Settings } from "../../types";
+import { Cpu, Download, RefreshCw, Save, Settings as SettingsIcon } from "lucide-react";
+import { checkForAppUpdatesManual, downloadAndPrepareAppUpdate, getAppVersion, getRuntimeStatus, getSettings, restartApplication, updateRuntime, updateSettings } from "../../api";
+import type { AppUpdateInfo, AppUpdatePrepareResult, RuntimeStatus, Settings } from "../../types";
 import { useToast } from "../common/Toast";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
+  const [appVersion, setAppVersion] = useState("");
+  const [appUpdate, setAppUpdate] = useState<AppUpdateInfo | null>(null);
+  const [preparedUpdate, setPreparedUpdate] = useState<AppUpdatePrepareResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const [checkingApp, setCheckingApp] = useState(false);
+  const [downloadingApp, setDownloadingApp] = useState(false);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
 
   async function load() {
     setLoading(true);
     try {
-      const [s, r] = await Promise.all([getSettings(), getRuntimeStatus()]);
+      const [s, r, v] = await Promise.all([getSettings(), getRuntimeStatus(), getAppVersion()]);
       setSettings(s);
       setRuntime(r);
+      setAppVersion(v);
     } catch (err) {
       addToast({ type: "error", title: "Load failed", message: String(err) });
     } finally {
@@ -49,6 +55,35 @@ export default function SettingsPage() {
     }
   }
 
+  async function checkAppUpdate() {
+    setCheckingApp(true);
+    try {
+      const update = await checkForAppUpdatesManual();
+      setAppUpdate(update);
+      setPreparedUpdate(null);
+      addToast({ type: update ? "info" : "success", title: update ? "App update available" : "App up to date", message: update ? `${update.latest_version} (${update.asset_name})` : undefined });
+    } catch (err) {
+      addToast({ type: "error", title: "App update check failed", message: String(err) });
+    } finally {
+      setCheckingApp(false);
+    }
+  }
+
+  async function downloadAppUpdate() {
+    if (!appUpdate) return;
+    if (!window.confirm(`Download app update ${appUpdate.latest_version}?`)) return;
+    setDownloadingApp(true);
+    try {
+      const prepared = await downloadAndPrepareAppUpdate(appUpdate);
+      setPreparedUpdate(prepared);
+      addToast({ type: "success", title: "App update ready", message: prepared.asset_name });
+    } catch (err) {
+      addToast({ type: "error", title: "App update download failed", message: String(err) });
+    } finally {
+      setDownloadingApp(false);
+    }
+  }
+
   if (loading || !settings) return <div className="page"><div className="skeleton skeleton-card" /></div>;
 
   return <div className="page">
@@ -59,6 +94,16 @@ export default function SettingsPage() {
       <Field label="GPMGlobal API URL" value={settings.gpmglobal_api_base_url} onChange={(v) => setSettings({ ...settings, gpmglobal_api_base_url: v })} />
       <Field label="Donut Browser API URL" value={settings.donutbrowser_api_base_url} onChange={(v) => setSettings({ ...settings, donutbrowser_api_base_url: v })} />
       <Field label="Max Parallel Runtimes" type="number" value={String(settings.global_max_parallel_runtime)} onChange={(v) => setSettings({ ...settings, global_max_parallel_runtime: Number(v) || 1 })} />
+      <label className="field"><span className="field__label">Disable App Auto Check</span><input type="checkbox" checked={settings.disable_auto_updates} onChange={(e) => setSettings({ ...settings, disable_auto_updates: e.target.checked })} /></label>
+    </div>
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Download size={16} /> Application Update</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { if (window.confirm(`Install app update ${preparedUpdate.latest_version} and restart now?`)) void restartApplication(preparedUpdate.installer_path); }}>Install & Restart</button>}</div></div>
+      <div className="form-grid">
+        <div>Current: <strong>{appVersion || "Unknown"}</strong></div>
+        <div>Latest: <strong>{appUpdate?.latest_version || "Unknown"}</strong></div>
+        {preparedUpdate && <div><span className="badge badge--success">Ready {preparedUpdate.latest_version}</span></div>}
+        {appUpdate ? <span className="badge badge--pending">Update available</span> : appVersion.startsWith("dev-") ? <span className="badge badge--queued">Dev build</span> : <span className="badge badge--success">Up to date</span>}
+      </div>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
       <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><button className="btn btn--secondary" onClick={runUpdate}><RefreshCw size={14} /> Update Now</button></div>

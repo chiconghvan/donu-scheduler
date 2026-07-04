@@ -18,6 +18,8 @@ import type {
   ScriptStoreCatalog,
   ScriptStoreInstallResult,
   ScriptStoreUpdateApplied,
+  AppUpdateInfo,
+  AppUpdatePrepareResult,
 } from "./types";
 
 export async function listScripts(): Promise<Script[]> {
@@ -97,6 +99,28 @@ export async function updateRuntime(): Promise<void> {
 
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   return invoke("get_runtime_status");
+}
+
+export async function getAppVersion(): Promise<string> {
+  return invoke("get_app_version");
+}
+
+export async function checkForAppUpdates(): Promise<AppUpdateInfo | null> {
+  return invoke("check_for_app_updates");
+}
+
+export async function checkForAppUpdatesManual(): Promise<AppUpdateInfo | null> {
+  return invoke("check_for_app_updates_manual");
+}
+
+export async function downloadAndPrepareAppUpdate(
+  update: AppUpdateInfo
+): Promise<AppUpdatePrepareResult> {
+  return invoke("download_and_prepare_app_update", { update });
+}
+
+export async function restartApplication(installerPath?: string): Promise<void> {
+  return invoke("restart_application", { installerPath: installerPath ?? null });
 }
 
 export async function runScriptTest(

@@ -14,12 +14,16 @@ pub fn get_settings(db_path: &PathBuf) -> Result<Settings, String> {
         .unwrap_or_else(|_| "3".to_string())
         .parse::<i32>()
         .unwrap_or(3);
+    let disable_auto_updates = crate::db::get_setting(&conn, "disable_auto_updates")
+        .unwrap_or_else(|_| "false".to_string())
+        == "true";
 
     Ok(Settings {
         gpmlogin_api_base_url,
         gpmglobal_api_base_url,
         donutbrowser_api_base_url,
         global_max_parallel_runtime,
+        disable_auto_updates,
     })
 }
 
@@ -35,6 +39,12 @@ pub fn update_settings(db_path: &PathBuf, settings: &Settings) -> Result<(), Str
         &conn,
         "global_max_parallel_runtime",
         &settings.global_max_parallel_runtime.to_string(),
+    )
+    .map_err(|e| e.to_string())?;
+    crate::db::set_setting(
+        &conn,
+        "disable_auto_updates",
+        if settings.disable_auto_updates { "true" } else { "false" },
     )
     .map_err(|e| e.to_string())?;
     Ok(())
