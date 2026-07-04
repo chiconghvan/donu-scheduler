@@ -43,13 +43,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
-          Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle -Recurse -Include *.exe,*.msi | ForEach-Object {
-            Copy-Item $_.FullName -Destination artifacts
-          }
-          $setup = Get-ChildItem -Path artifacts -Filter "*.exe" | Select-Object -First 1
-          if ($setup) {
-            $version = "${{ github.ref_name }}".TrimStart('v')
-            Copy-Item $setup.FullName -Destination "artifacts/DonuScheduler_${version}_x64-setup.exe" -Force
+          Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle -Recurse -Include *.exe,*.msi,*.zip | ForEach-Object {
+            Copy-Item $_.FullName -Destination (Join-Path artifacts $_.Name) -Force
           }
 
       - name: Create GitHub Release
