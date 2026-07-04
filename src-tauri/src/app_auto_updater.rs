@@ -155,7 +155,6 @@ pub fn restart_application(
 
     if let Some(path) = pending_path {
         spawn_silent_update_script(PathBuf::from(path))?;
-        clear_pending_installer_path(&state)?;
     }
     app_handle.exit(0);
     Ok(())
@@ -317,12 +316,6 @@ fn load_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Resul
         .filter(|path| !path.trim().is_empty()))
 }
 
-fn clear_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
-    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
-    let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
-    crate::db::set_setting(&conn, PENDING_INSTALLER_PATH_KEY, "").map_err(|e| e.to_string())
-}
-
 fn spawn_silent_update_script(installer_path: PathBuf) -> Result<(), String> {
     if !installer_path.exists() {
         return Err(format!("Pending installer not found: {}", installer_path.display()));
@@ -331,6 +324,7 @@ fn spawn_silent_update_script(installer_path: PathBuf) -> Result<(), String> {
     let app_exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let pid = std::process::id();
     let script_path = app_update_dir().join("install_pending_update.cmd");
+    let log_path = app_update_dir().join("install_pending_update.log");
     let installer_args = silent_installer_args(&installer_path)?;
     let content = format!(
         "@echo off\r\n\
@@ -338,18 +332,25 @@ setlocal\r\n\
 set \"APP_PID={}\"\r\n\
 set \"INSTALLER={}\"\r\n\
 set \"APP_EXE={}\"\r\n\
+set \"LOG_PATH={}\"\r\n\
 :wait_app\r\n\
 tasklist /fi \"PID eq %APP_PID%\" | findstr /r /c:\"[ ]%APP_PID%[ ]\" >nul\r\n\
 if not errorlevel 1 (\r\n\
   timeout /t 1 /nobreak >nul\r\n\
   goto wait_app\r\n\
 )\r\n\
-\"%INSTALLER%\" {}\r\n\
+echo [%date% %time%] Running installer: \"%INSTALLER%\" {} > \"%LOG_PATH%\"\r\n\
+\"%INSTALLER%\" {} >> \"%LOG_PATH%\" 2>&1\r\n\
+set \"INSTALL_EXIT=%ERRORLEVEL%\"\r\n\
+echo [%date% %time%] Installer exit code: %INSTALL_EXIT% >> \"%LOG_PATH%\"\r\n\
 start \"\" \"%APP_EXE%\"\r\n\
+exit /b %INSTALL_EXIT%\r\n\
 endlocal\r\n",
         pid,
         batch_escape(&installer_path.to_string_lossy()),
         batch_escape(&app_exe.to_string_lossy()),
+        batch_escape(&log_path.to_string_lossy()),
+        installer_args,
         installer_args,
     );
     std::fs::write(&script_path, content).map_err(|e| e.to_string())?;

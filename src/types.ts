@@ -275,6 +275,12 @@ export interface RuntimeUpdateAvailablePayload {
 export interface RuntimeUpdateSuccessPayload {
   version: string;
   asset_name: string;
+  initial_install: boolean;
+}
+
+export interface RuntimeUpdatePendingPayload {
+  version: string;
+  asset_name: string;
 }
 
 export interface RuntimeUpdateErrorPayload {

@@ -21,6 +21,8 @@ interface ToastOptions {
   message?: string;
   duration?: number;
   action?: ToastAction;
+  key?: string;
+  progress?: number;
 }
 
 interface ToastItem extends ToastOptions {
@@ -42,6 +44,7 @@ export function useToast(): ToastContextValue {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const idRef = useRef(0);
+  const timersRef = useRef<Map<string | number, number>>(new Map());
 
   const removeToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -51,12 +54,30 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (options: ToastOptions) => {
       const id = ++idRef.current;
       const duration = options.duration ?? 5000;
-      setToasts((prev) => [...prev, { ...options, id }]);
+      const timerKey = options.key ?? id;
+      const existingTimer = timersRef.current.get(timerKey);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+        timersRef.current.delete(timerKey);
+      }
+
+      setToasts((prev) => {
+        if (!options.key) return [...prev, { ...options, id }];
+
+        const existing = prev.find((toast) => toast.key === options.key);
+        if (!existing) return [...prev, { ...options, id }];
+
+        return prev.map((toast) => toast.key === options.key ? { ...toast, ...options } : toast);
+      });
       if (duration > 0) {
-        setTimeout(() => removeToast(id), duration);
+        const timerId = window.setTimeout(() => {
+          setToasts((prev) => prev.filter((toast) => options.key ? toast.key !== options.key : toast.id !== id));
+          timersRef.current.delete(timerKey);
+        }, duration);
+        timersRef.current.set(timerKey, timerId);
       }
     },
-    [removeToast],
+    [],
   );
 
   return (
@@ -68,6 +89,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div className="toast__content">
               <div className="toast__title">{toast.title}</div>
               {toast.message && <div className="toast__message">{toast.message}</div>}
+              {typeof toast.progress === "number" && (
+                <div className="toast__progress" aria-label={`Progress ${Math.round(toast.progress)}%`}>
+                  <div className="toast__progress-fill" style={{ width: `${Math.max(0, Math.min(100, toast.progress))}%` }} />
+                </div>
+              )}
             </div>
             {toast.action && (
               <div className="toast__actions">

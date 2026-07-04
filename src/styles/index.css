@@ -808,6 +808,18 @@ table.table {
   color: var(--fg-secondary);
   font-size: var(--text-xs);
 }
+.toast__progress {
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  height: 6px;
+  margin-top: var(--space-2);
+  overflow: hidden;
+}
+.toast__progress-fill {
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+  height: 100%;
+  transition: width 160ms ease;
+}
 .toast__close {
   background: none;
   border: none;

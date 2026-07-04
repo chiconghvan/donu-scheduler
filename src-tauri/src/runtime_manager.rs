@@ -46,6 +46,13 @@ pub struct RuntimeUpdateAvailablePayload {
 pub struct RuntimeUpdateSuccessPayload {
     pub version: String,
     pub asset_name: String,
+    pub initial_install: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeUpdatePendingPayload {
+    pub version: String,
+    pub asset_name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,6 +242,13 @@ async fn install_runtime_asset(
         metadata.pending_asset_name = Some(asset.asset_name.clone());
         metadata.pending_path = Some(cache_path.to_string_lossy().to_string());
         write_metadata(&metadata)?;
+        let _ = app_handle.emit(
+            "runtime-update-pending",
+            RuntimeUpdatePendingPayload {
+                version: asset.version.clone(),
+                asset_name: asset.asset_name.clone(),
+            },
+        );
         return Ok(());
     }
 
@@ -248,9 +262,7 @@ async fn install_runtime_asset(
         pending_asset_name: None,
         pending_path: None,
     })?;
-    if !initial_install {
-        emit_update_success(app_handle, asset.version.clone(), asset.asset_name.clone()).await;
-    }
+    emit_update_success(app_handle, asset.version.clone(), asset.asset_name.clone(), initial_install).await;
     Ok(())
 }
 
@@ -294,7 +306,7 @@ async fn apply_pending_update_if_possible(
     metadata.pending_asset_name = None;
     metadata.pending_path = None;
     write_metadata(&metadata)?;
-    emit_update_success(app_handle, version, asset_name).await;
+    emit_update_success(app_handle, version, asset_name, false).await;
     Ok(())
 }
 
@@ -420,7 +432,12 @@ fn is_runtime_running(process_registry: &Arc<Mutex<HashMap<String, u32>>>) -> bo
     false
 }
 
-async fn emit_update_success(app_handle: tauri::AppHandle, version: String, asset_name: String) {
+async fn emit_update_success(
+    app_handle: tauri::AppHandle,
+    version: String,
+    asset_name: String,
+    initial_install: bool,
+) {
     let lock = LAST_RUNTIME_SUCCESS_VERSION.get_or_init(|| Mutex::new(None));
     if let Ok(mut last_version) = lock.lock() {
         if last_version.as_deref() == Some(version.as_str()) {
@@ -429,7 +446,7 @@ async fn emit_update_success(app_handle: tauri::AppHandle, version: String, asse
         *last_version = Some(version.clone());
     }
 
-    let payload = RuntimeUpdateSuccessPayload { version, asset_name };
+    let payload = RuntimeUpdateSuccessPayload { version, asset_name, initial_install };
     let _ = app_handle.emit("runtime-update-success", payload);
 
     if !has_visible_window(&app_handle) {

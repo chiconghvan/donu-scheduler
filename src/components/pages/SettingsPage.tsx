@@ -13,6 +13,8 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [checkingApp, setCheckingApp] = useState(false);
   const [downloadingApp, setDownloadingApp] = useState(false);
+  const [checkingRuntime, setCheckingRuntime] = useState(false);
+  const [updatingRuntime, setUpdatingRuntime] = useState(false);
   const [loading, setLoading] = useState(true);
   const { addToast } = useToast();
 
@@ -45,17 +47,41 @@ export default function SettingsPage() {
     }
   }
 
-  async function runUpdate() {
-    if (runtime && !runtime.update_available) {
-      addToast({ type: "success", title: "Runtime up to date", message: runtime.installed_version || undefined });
-      return;
+  async function checkRuntimeUpdate() {
+    setCheckingRuntime(true);
+    try {
+      const nextRuntime = await getRuntimeStatus();
+      setRuntime(nextRuntime);
+      addToast({
+        key: "settings-runtime-check",
+        type: nextRuntime.update_available ? "info" : "success",
+        title: nextRuntime.update_available ? "Runtime update available" : "Runtime up to date",
+        message: nextRuntime.update_available
+          ? `${nextRuntime.latest_version} (${nextRuntime.latest_asset_name || "runtime"})`
+          : nextRuntime.installed_version || undefined,
+        action: nextRuntime.update_available ? {
+          label: "Update Now",
+          onClick: () => { void runRuntimeUpdate(nextRuntime); },
+        } : undefined,
+      });
+    } catch (err) {
+      addToast({ key: "settings-runtime-check", type: "error", title: "Runtime update check failed", message: String(err) });
+    } finally {
+      setCheckingRuntime(false);
     }
+  }
+
+  async function runRuntimeUpdate(targetRuntime = runtime) {
+    if (!targetRuntime?.update_available) return;
+    if (!window.confirm(`Download and install runtime update ${targetRuntime.latest_version}?`)) return;
+    setUpdatingRuntime(true);
     try {
       await updateRuntime();
-      addToast({ type: "info", title: "Runtime update started" });
-      void load();
+      await load();
     } catch (err) {
       addToast({ type: "error", title: "Runtime update failed", message: String(err) });
+    } finally {
+      setUpdatingRuntime(false);
     }
   }
 
@@ -65,9 +91,9 @@ export default function SettingsPage() {
       const update = await checkForAppUpdatesManual();
       setAppUpdate(update);
       setPreparedUpdate(null);
-      addToast({ type: update ? "info" : "success", title: update ? "App update available" : "App up to date", message: update ? `${update.latest_version} (${update.asset_name})` : undefined });
+      addToast({ key: "settings-app-check", type: update ? "info" : "success", title: update ? "App update available" : "App up to date", message: update ? `${update.latest_version} (${update.asset_name})` : undefined });
     } catch (err) {
-      addToast({ type: "error", title: "App update check failed", message: String(err) });
+      addToast({ key: "settings-app-check", type: "error", title: "App update check failed", message: String(err) });
     } finally {
       setCheckingApp(false);
     }
@@ -80,7 +106,6 @@ export default function SettingsPage() {
     try {
       const prepared = await downloadAndPrepareAppUpdate(appUpdate);
       setPreparedUpdate(prepared);
-      addToast({ type: "success", title: "App update ready", message: `${prepared.asset_name}. Restart to install.` });
     } catch (err) {
       addToast({ type: "error", title: "App update download failed", message: String(err) });
     } finally {
@@ -120,7 +145,7 @@ export default function SettingsPage() {
       </div>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><button className="btn btn--secondary" onClick={runUpdate} disabled={runtime ? !runtime.update_available : true}><RefreshCw size={14} /> Update Now</button></div>
+      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkRuntimeUpdate} disabled={checkingRuntime || !runtime}><RefreshCw size={14} /> Check Update</button>{runtime?.update_available && <button className="btn btn--primary" onClick={() => { void runRuntimeUpdate(); }} disabled={updatingRuntime}><Download size={14} /> Update Now</button>}</div></div>
       {runtime ? <div className="form-grid">
         <div>Installed: <strong>{runtime.installed_version || "None"}</strong> {runtime.installed_asset_name}</div>
         <div>Latest: <strong>{runtime.latest_version || "Unknown"}</strong></div>
