@@ -1,7 +1,7 @@
 import {
   LayoutDashboard,
   Store,
-  FlaskConical,
+  PlaySquare,
   CalendarClock,
   Activity,
   Settings,
@@ -15,7 +15,7 @@ interface SidebarProps {
 const topItems = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { id: "store", icon: Store, label: "Script Store" },
-  { id: "testlab", icon: FlaskConical, label: "Test Lab" },
+  { id: "testlab", icon: PlaySquare, label: "Manual Run" },
   { id: "jobs", icon: CalendarClock, label: "Jobs" },
   { id: "activity", icon: Activity, label: "Activity" },
 ] as const;

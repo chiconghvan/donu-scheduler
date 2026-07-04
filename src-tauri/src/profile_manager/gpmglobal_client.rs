@@ -4,6 +4,10 @@ pub struct GpmGlobalClient {
     pub base_url: String,
 }
 
+fn display_browser_type(raw: Option<&str>) -> Option<String> {
+    raw.map(|value| if value.eq_ignore_ascii_case("camoufox") { "Firefox" } else { "Chrome" }.to_string())
+}
+
 impl GpmGlobalClient {
     pub fn new(base_url: String) -> Self {
         Self { base_url }
@@ -78,6 +82,7 @@ impl GpmGlobalClient {
                         name: name.to_string(),
                         manager: "gpmglobal".to_string(),
                         group_name,
+                        browser_type: display_browser_type(p["browser"]["name"].as_str()),
                     });
                 }
             }

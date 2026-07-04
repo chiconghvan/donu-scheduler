@@ -249,6 +249,7 @@ export interface ProfileSummary {
   name: string;
   manager: string;
   group_name: string | null;
+  browser_type: string | null;
 }
 
 export type ManagerKey = "gpm" | "gpmglobal" | "donut";
@@ -258,6 +259,7 @@ export interface SelectedJobProfile {
   manager: ManagerKey;
   name: string;
   group_name: string | null;
+  browser_type?: string | null;
 }
 
 export interface InputCache {

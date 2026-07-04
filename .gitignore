@@ -12,6 +12,7 @@ src-tauri/gen/
 
 # Docs
 docs/
+design/
 
 # OS files
 Thumbs.db

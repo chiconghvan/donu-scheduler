@@ -18,7 +18,7 @@ type Page = "dashboard" | "store" | "testlab" | "jobs" | "activity" | "settings"
 const titles: Record<Page, string> = {
   dashboard: "Dashboard",
   store: "Script Store",
-  testlab: "Test Lab",
+  testlab: "Manual Run",
   jobs: "Jobs",
   activity: "Activity",
   settings: "Settings",

@@ -4,6 +4,10 @@ pub struct DonutBrowserClient {
     pub base_url: String,
 }
 
+fn display_browser_type(raw: Option<&str>) -> Option<String> {
+    raw.map(|value| if value.eq_ignore_ascii_case("camoufox") { "Firefox" } else { "Chrome" }.to_string())
+}
+
 impl DonutBrowserClient {
     pub fn new(base_url: String) -> Self {
         Self { base_url }
@@ -84,6 +88,7 @@ impl DonutBrowserClient {
                     name: name.to_string(),
                     manager: "donut".to_string(),
                     group_name,
+                    browser_type: display_browser_type(p["browser"].as_str()),
                 });
             }
         }

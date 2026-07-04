@@ -137,7 +137,15 @@ export function jsonToSchedule(
 
 export function parseSelectedProfiles(value: string): SelectedJobProfile[] {
   try {
-    return JSON.parse(value || "[]");
+    const parsed = JSON.parse(value || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((p) => ({
+      id: String(p.id),
+      manager: p.manager,
+      name: String(p.name || p.id),
+      group_name: p.group_name || null,
+      browser_type: p.browser_type || null,
+    }));
   } catch {
     return [];
   }

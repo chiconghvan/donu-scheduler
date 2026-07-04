@@ -78,6 +78,13 @@ DonuScheduler/
 │       └── settings/
 │           ├── repository.rs     # Settings CRUD
 │           └── commands.rs       # Tauri commands
+├── design/                       # UI/design docs
+│   ├── README.md
+│   ├── design.md
+│   ├── new-ui-architecture.md
+│   ├── new-ui-to-logic-map.md
+│   ├── workflow-logic-map.md
+│   └── screens.md
 ├── docs/                         # API guides
 │   ├── GPM_API_GUIDE.md
 │   ├── donut-api-guide.md

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ManagerKey, SelectedJobProfile } from "../../types";
+import { useEffect, useMemo, useState, type Dispatch, type KeyboardEvent, type SetStateAction } from "react";
+import type { ManagerKey, ProfileSummary, SelectedJobProfile } from "../../types";
 import { useProfiles } from "../../hooks/useProfiles";
 import { useMultiSelect } from "../../hooks/useMultiSelect";
 import { Search } from "lucide-react";
@@ -102,6 +102,7 @@ export default function ProfilePickerDialog({
         manager: leftTab,
         name: p.name,
         group_name: p.group_name,
+        browser_type: p.browser_type,
       }));
     if (adding.length === 0) return;
     setDraft((prev) => [...prev, ...adding]);
@@ -116,22 +117,54 @@ export default function ProfilePickerDialog({
     setRightSelectedIds(new Set());
   };
 
+  const toggleVisible = <T extends { id: string }>(items: T[], setIds: Dispatch<SetStateAction<Set<string>>>) => {
+    const ids = items.map((p) => p.id);
+    if (ids.length === 0) return;
+    setIds((prev) => {
+      const allSelected = ids.every((id) => prev.has(id));
+      const next = new Set(prev);
+      ids.forEach((id) => allSelected ? next.delete(id) : next.add(id));
+      return next;
+    });
+  };
+
+  const selectVisible = <T extends { id: string }>(e: KeyboardEvent<HTMLDivElement>, items: T[], setIds: Dispatch<SetStateAction<Set<string>>>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      setIds((prev) => new Set([...prev, ...items.map((p) => p.id)]));
+    }
+  };
+
+  const renderProfileRows = <T extends ProfileSummary | SelectedJobProfile>(items: T[], selectedIds: Set<string>, multi: ReturnType<typeof useMultiSelect<T>>) => items.map((p, i) => (
+    <tr
+      key={`${"manager" in p ? p.manager : leftTab}:${p.id}`}
+      className={selectedIds.has(p.id) ? "table-row--selected" : ""}
+      onMouseDown={(e) => multi.handleRowMouseDown(e, i)}
+      onMouseMove={(e) => multi.handleRowMouseMove(e, i)}
+      onMouseUp={(e) => multi.handleRowMouseUp(e, i)}
+    >
+      <td className="profile-table__index">{i + 1}</td>
+      <td>{p.name}</td>
+      <td>{p.group_name || "-"}</td>
+      <td>{p.browser_type || "-"}</td>
+    </tr>
+  ));
+
   if (!open) return null;
 
   return (
     <div className="dialog-backdrop" onClick={onCancel}>
       <div
-        className="dialog"
-        style={{ maxWidth: 1100, width: "95vw" }}
+        className="dialog profile-picker-dialog"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog__header">
           Choose Profiles ({draft.length} selected)
         </div>
 
-        <div style={{ display: "flex", gap: 12, padding: "12px 0", minHeight: 400 }}>
+        <div className="profile-picker-dialog__body">
           {/* Available column */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="profile-picker-dialog__column">
             <div className="tabs">
               {managers.map((m) => (
                 <button
@@ -171,31 +204,17 @@ export default function ProfilePickerDialog({
               </select>
             )}
 
-            <div className="table" style={{ flex: 1, overflow: "auto" }}>
-              {leftLoading && <div style={{ padding: 8 }}>Loading...</div>}
-              {availableProfiles.map((p, i) => (
-                <div
-                  key={p.id}
-                  className={`profile-item${leftSelectedIds.has(p.id) ? " profile-item--selected" : ""}`}
-                  onMouseDown={(e) => leftMulti.handleRowMouseDown(e, i)}
-                  onMouseMove={(e) => leftMulti.handleRowMouseMove(e, i)}
-                  onMouseUp={(e) => leftMulti.handleRowMouseUp(e, i)}
-                  style={{ userSelect: "none", cursor: "pointer" }}
-                >
-                  <span className="profile-item__name">{p.name}</span>
-                  {p.group_name && (
-                    <span className="profile-item__group">{p.group_name}</span>
-                  )}
-                </div>
-              ))}
+            <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, availableProfiles, setLeftSelectedIds)}>
+              {leftLoading && <div className="empty-inline">Loading...</div>}
+              <table className="table profile-table"><thead><tr><th className="profile-table__index" onClick={() => toggleVisible(availableProfiles, setLeftSelectedIds)}>#</th><th>Name</th><th>Group</th><th>Browser Type</th></tr></thead><tbody>{renderProfileRows(availableProfiles, leftSelectedIds, leftMulti)}</tbody></table>
               {!leftLoading && availableProfiles.length === 0 && (
-                <div style={{ padding: 8, opacity: 0.5 }}>No profiles</div>
+                <div className="empty-inline">No profiles</div>
               )}
             </div>
           </div>
 
           {/* Middle buttons */}
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
+          <div className="profile-picker-dialog__actions">
             <button
               className="btn btn--primary"
               onClick={addProfiles}
@@ -213,7 +232,7 @@ export default function ProfilePickerDialog({
           </div>
 
           {/* Selected column */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="profile-picker-dialog__column">
             <div className="tabs">
               {managers.map((m) => {
                 const count = draft.filter((p) => p.manager === m.key).length;
@@ -242,24 +261,10 @@ export default function ProfilePickerDialog({
               />
             </div>
 
-            <div className="table" style={{ flex: 1, overflow: "auto" }}>
-              {selectedProfiles.map((p, i) => (
-                <div
-                  key={p.id}
-                  className={`profile-item${rightSelectedIds.has(p.id) ? " profile-item--selected" : ""}`}
-                  onMouseDown={(e) => rightMulti.handleRowMouseDown(e, i)}
-                  onMouseMove={(e) => rightMulti.handleRowMouseMove(e, i)}
-                  onMouseUp={(e) => rightMulti.handleRowMouseUp(e, i)}
-                  style={{ userSelect: "none", cursor: "pointer" }}
-                >
-                  <span className="profile-item__name">{p.name}</span>
-                  {p.group_name && (
-                    <span className="profile-item__group">{p.group_name}</span>
-                  )}
-                </div>
-              ))}
+            <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, selectedProfiles, setRightSelectedIds)}>
+              <table className="table profile-table"><thead><tr><th className="profile-table__index" onClick={() => toggleVisible(selectedProfiles, setRightSelectedIds)}>#</th><th>Name</th><th>Group</th><th>Browser Type</th></tr></thead><tbody>{renderProfileRows(selectedProfiles, rightSelectedIds, rightMulti)}</tbody></table>
               {selectedProfiles.length === 0 && (
-                <div style={{ padding: 8, opacity: 0.5 }}>No selected profiles</div>
+                <div className="empty-inline">No selected profiles</div>
               )}
             </div>
           </div>

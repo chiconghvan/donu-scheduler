@@ -264,6 +264,7 @@ pub struct ProfileSummary {
     pub name: String,
     pub manager: String,
     pub group_name: Option<String>,
+    pub browser_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

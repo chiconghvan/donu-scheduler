@@ -18,7 +18,15 @@ export function buildProfileSnapshots(
 
 export function parseSelectedProfiles(json: string): SelectedJobProfile[] {
   try {
-    return JSON.parse(json || "[]");
+    const parsed = JSON.parse(json || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((p) => ({
+      id: String(p.id),
+      manager: p.manager,
+      name: String(p.name || p.id),
+      group_name: p.group_name || null,
+      browser_type: p.browser_type || null,
+    }));
   } catch {
     return [];
   }
