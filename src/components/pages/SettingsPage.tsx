@@ -94,13 +94,23 @@ export default function SettingsPage() {
       <Field label="GPMGlobal API URL" value={settings.gpmglobal_api_base_url} onChange={(v) => setSettings({ ...settings, gpmglobal_api_base_url: v })} />
       <Field label="Donut Browser API URL" value={settings.donutbrowser_api_base_url} onChange={(v) => setSettings({ ...settings, donutbrowser_api_base_url: v })} />
       <Field label="Max Parallel Runtimes" type="number" value={String(settings.global_max_parallel_runtime)} onChange={(v) => setSettings({ ...settings, global_max_parallel_runtime: Number(v) || 1 })} />
-      <label className="field"><span className="field__label">Disable App Auto Check</span><input type="checkbox" checked={settings.disable_auto_updates} onChange={(e) => setSettings({ ...settings, disable_auto_updates: e.target.checked })} /></label>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Download size={16} /> Application Update</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { if (window.confirm(`Install app update ${preparedUpdate.latest_version} and restart now?`)) void restartApplication(preparedUpdate.installer_path); }}>Install & Restart</button>}</div></div>
-      <div className="form-grid">
-        <div>Current: <strong>{appVersion || "Unknown"}</strong></div>
-        <div>Latest: <strong>{appUpdate?.latest_version || "Unknown"}</strong></div>
+      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { if (window.confirm(`Install app update ${preparedUpdate.latest_version} and restart now?`)) void restartApplication(preparedUpdate.installer_path); }}>Install & Restart</button>}</div></div>
+      <div className="settings-option">
+        <div className="settings-option__copy">
+          <div className="settings-option__title">Auto check on startup</div>
+          <div className="settings-option__hint">Checks GitHub for new app versions after launch. Downloads and installs still require confirmation.</div>
+        </div>
+        <label className="toggle" aria-label="Auto check app updates">
+          <input type="checkbox" checked={!settings.disable_auto_updates} onChange={(e) => setSettings({ ...settings, disable_auto_updates: !e.target.checked })} />
+          <span className="toggle__track" />
+          <span className="toggle__thumb" />
+        </label>
+      </div>
+      <div className="settings-version-grid">
+        <div className="settings-meta-item"><span>Current</span><strong>{appVersion || "Unknown"}</strong></div>
+        <div className="settings-meta-item"><span>Latest</span><strong>{appUpdate?.latest_version || "Unknown"}</strong></div>
         {preparedUpdate && <div><span className="badge badge--success">Ready {preparedUpdate.latest_version}</span></div>}
         {appUpdate ? <span className="badge badge--pending">Update available</span> : appVersion.startsWith("dev-") ? <span className="badge badge--queued">Dev build</span> : <span className="badge badge--success">Up to date</span>}
       </div>
