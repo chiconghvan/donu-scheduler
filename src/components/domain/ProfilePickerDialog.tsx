@@ -181,28 +181,30 @@ export default function ProfilePickerDialog({
               ))}
             </div>
 
-            <div className="search-input" style={{ position: "relative" }}>
-              <Search size={14} className="search-input__icon" />
-              <input
-                className="input"
-                placeholder="Search available..."
-                value={leftSearch}
-                onChange={(e) => setLeftSearch(e.target.value)}
-              />
-            </div>
+            <div className="profile-filter-row">
+              <div className="search-input profile-filter-row__search" style={{ position: "relative" }}>
+                <Search size={14} className="search-input__icon" />
+                <input
+                  className="input"
+                  placeholder="Search available..."
+                  value={leftSearch}
+                  onChange={(e) => setLeftSearch(e.target.value)}
+                />
+              </div>
 
-            {leftGroups.length > 0 && (
-              <select
-                className="select"
-                value={leftGroup}
-                onChange={(e) => setLeftGroup(e.target.value)}
-              >
-                <option value="all">All Groups</option>
-                {leftGroups.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
-            )}
+              {leftGroups.length > 0 && (
+                <select
+                  className="select profile-filter-row__group"
+                  value={leftGroup}
+                  onChange={(e) => setLeftGroup(e.target.value)}
+                >
+                  <option value="all">All Groups</option>
+                  {leftGroups.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              )}
+            </div>
 
             <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, availableProfiles, setLeftSelectedIds)}>
               {leftLoading && <div className="empty-inline">Loading...</div>}
@@ -251,7 +253,7 @@ export default function ProfilePickerDialog({
               })}
             </div>
 
-            <div className="search-input" style={{ position: "relative" }}>
+            <div className="search-input profile-filter-row__search" style={{ position: "relative" }}>
               <Search size={14} className="search-input__icon" />
               <input
                 className="input"

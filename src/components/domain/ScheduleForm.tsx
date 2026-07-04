@@ -7,6 +7,12 @@ const modeLabels: { key: ScheduleMode; label: string }[] = [
   { key: "daily_times", label: "Daily Times" },
 ];
 
+const dayPresets = [
+  { label: "Mỗi ngày", days: [1, 2, 3, 4, 5, 6, 7] },
+  { label: "Ngày thường", days: [1, 2, 3, 4, 5] },
+  { label: "Cuối tuần", days: [6, 7] },
+];
+
 interface ScheduleFormProps {
   value: ScheduleUiState;
   onChange: (value: ScheduleUiState) => void;
@@ -25,9 +31,15 @@ export default function ScheduleForm({ value, onChange }: ScheduleFormProps) {
     set("activeDays", next);
   };
 
+  const sameDays = (days: number[]) =>
+    days.length === value.activeDays.length &&
+    days.every((day) => value.activeDays.includes(day));
+
   return (
     <div>
-      {/* Mode tabs */}
+      <div className="field">
+        <label className="field__label">Mode</label>
+      </div>
       <div className="tabs">
         {modeLabels.map((m) => (
           <button
@@ -43,7 +55,8 @@ export default function ScheduleForm({ value, onChange }: ScheduleFormProps) {
 
       {/* Mode-specific fields */}
       {value.mode === "window_count" && (
-        <div className="form-grid">
+        <div className="form-grid schedule-mode-fields">
+          <div className="section-title">Window</div>
           <div className="field">
             <label className="field__label">Start Time</label>
             <input
@@ -72,6 +85,7 @@ export default function ScheduleForm({ value, onChange }: ScheduleFormProps) {
               onChange={(e) => set("runsPerProfile", Number(e.target.value) || 1)}
             />
           </div>
+          <div className="section-title">Random gap</div>
           <div className="field">
             <label className="field__label">Min Gap (min)</label>
             <input
@@ -136,22 +150,40 @@ export default function ScheduleForm({ value, onChange }: ScheduleFormProps) {
         </div>
       )}
 
-      {/* Active days picker */}
-      <div className="day-picker">
-        {dayLabels.map((label, i) => {
-          const day = i + 1;
-          const active = value.activeDays.includes(day);
-          return (
-            <button
-              key={day}
-              type="button"
-              className={`day-picker__btn${active ? " day-picker__btn--active" : ""}`}
-              onClick={() => toggleDay(day)}
-            >
-              {label}
-            </button>
-          );
-        })}
+      <div className="field schedule-days-field">
+        <label className="field__label">Ngày chạy</label>
+        <div className="day-presets">
+          {dayPresets.map((preset) => {
+            const active = sameDays(preset.days);
+            return (
+              <button
+                key={preset.label}
+                type="button"
+                className={`day-preset${active ? " day-preset--active" : ""}`}
+                onClick={() => set("activeDays", preset.days)}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="day-picker day-picker--compact">
+          {dayLabels.map((label, i) => {
+            const day = i + 1;
+            const active = value.activeDays.includes(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                className={`day-picker__btn${active ? " day-picker__btn--active" : ""}`}
+                onClick={() => toggleDay(day)}
+                aria-pressed={active}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

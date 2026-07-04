@@ -18,6 +18,8 @@ Tauri v2 desktop app. Rust backend + React/TypeScript/Vite frontend + SQLite.
 - **Backend:** `src-tauri/src/` — Rust, rusqlite (bundled), tokio, reqwest
 - **DB:** `%LOCALAPPDATA%/DonuScheduler/donu_scheduler.sqlite`
 - **Runtime:** `donumate_v0.5.6.exe` at repo root (spawned by runner module)
+- **UI docs:** `design/` (design notes, screen maps, workflow maps)
+- **API docs:** `docs/`
 
 ## Rust Module Map
 
@@ -33,6 +35,19 @@ src-tauri/src/
   runner/          → process spawn abstraction (fake + real)
   profile_manager/ → GPMLogin + Donut Browser REST clients
   settings/        → key-value settings CRUD
+```
+
+Frontend layout:
+
+```text
+src/
+  components/common/   → Dialog, Toast, EmptyState, Badge helpers
+  components/domain/   → LogViewer, ProfilePickerDialog, DefaultInputs, etc.
+  components/pages/    → Dashboard, Script Store, Manual Run, Jobs, Activity, Settings
+  components/shell/    → App shell, Sidebar, WindowControls
+  hooks/               → reusable state/interaction hooks
+  utils/               → pure helpers/adapters
+  styles/index.css     → global dark theme CSS
 ```
 
 ## Frontend → Backend
@@ -53,7 +68,8 @@ If schema changes, delete `%LOCALAPPDATA%/DonuScheduler/donu_scheduler.sqlite` t
 - **CLI args are plain text** (`--headless --input key=value`), NOT JSON. Stored in `cli_args` / `default_args` columns.
 - **Runner dispatch:** `runner::run()` checks `runtime_path` — empty → fake (2s sleep), non-empty → spawns `donumate_vX.exe`.
 - **Scheduler:** Background loop in `lib.rs:40-45`, ticks every 20s. Reads settings from DB on each tick.
-- **Profile manager:** GPMLogin uses `/api/v3/profiles` (Standard), Donut uses `/v1/profiles`. API URLs from settings table.
+- **Profile manager:** GPMLogin uses `/api/v3/profiles`, GPM Global uses `/api/v1/profiles`, Donut uses `/v1/profiles`. API URLs from settings table.
+- **Browser type display:** backend maps raw `camoufox` to UI `Firefox`, everything else to `Chrome`.
 
 ## Conventions
 
@@ -61,4 +77,4 @@ If schema changes, delete `%LOCALAPPDATA%/DonuScheduler/donu_scheduler.sqlite` t
 - JSON fields (`schedule_json`, `random_json`, `profile_ids_json`) validated with `serde_json::from_str` on insert/update.
 - IDs are UUID v4 strings (`uuid::Uuid::new_v4()`).
 - Timestamps are ISO 8601 local time (`chrono::Local::now().format("%Y-%m-%dT%H:%M:%S")`).
-- Frontend: no UI library, plain CSS in `App.css`, dark theme.
+- Frontend: no UI library, plain CSS in `src/styles/index.css`, dark theme.

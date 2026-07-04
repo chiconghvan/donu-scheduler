@@ -407,6 +407,11 @@ body {
   font-weight: 500;
   color: var(--fg-secondary);
 }
+.field__hint {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  margin-top: var(--space-1);
+}
 
 /* ---------- Select ---------- */
 .select {
@@ -674,6 +679,56 @@ table.table {
   flex-shrink: 0;
 }
 
+.job-dialog {
+  width: min(920px, 95vw);
+  height: min(820px, 90vh);
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.job-dialog__header,
+.job-dialog__footer {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+}
+
+.job-dialog__header {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.job-dialog__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 650;
+}
+
+.job-dialog__subtitle {
+  margin-top: var(--space-1);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.job-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.job-dialog__footer {
+  margin-top: 0;
+  border-top: 1px solid var(--border-default);
+  background: color-mix(in srgb, var(--bg-raised) 92%, var(--bg-base) 8%);
+}
+
 .profile-picker-dialog__body {
   flex: 1;
   min-height: 0;
@@ -882,6 +937,22 @@ table.table {
   padding-left: 32px;
 }
 
+.profile-filter-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.profile-filter-row__search {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-filter-row__group {
+  flex: 0 0 180px;
+  min-width: 180px;
+}
+
 /* ---------- Toggle Switch ---------- */
 .toggle {
   position: relative;
@@ -1059,6 +1130,136 @@ table.table {
   gap: var(--space-3);
 }
 
+.form-error {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  color: var(--fg-primary);
+}
+
+.form-error strong {
+  color: var(--accent-red);
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.job-form-section {
+  background: color-mix(in srgb, var(--bg-raised) 82%, var(--bg-surface) 18%);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.job-form-section__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.job-form-section__title {
+  font-weight: 650;
+  color: var(--fg-primary);
+}
+
+.job-form-section__hint {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
+.job-profile-picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.job-profile-count {
+  color: var(--fg-secondary);
+  font-size: var(--text-sm);
+}
+
+.job-profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.job-profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  color: var(--fg-secondary);
+  font-size: var(--text-xs);
+}
+
+.job-profile-chip--muted {
+  color: var(--fg-muted);
+}
+
+.schedule-mode-fields {
+  margin-top: var(--space-3);
+}
+
+.schedule-mode-fields .section-title {
+  margin: var(--space-1) 0 0;
+}
+
+.schedule-days-field {
+  margin-top: var(--space-3);
+}
+
+.day-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.day-preset {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--fg-secondary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--transition-normal), border-color var(--transition-normal), color var(--transition-normal);
+}
+
+.day-preset:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-hover);
+}
+
+.day-preset--active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: var(--accent-blue);
+}
+
+.day-picker--compact {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(36px, 1fr));
+  gap: var(--space-2);
+}
+
+.day-picker--compact .day-picker__btn {
+  width: 100%;
+}
+
 /* Profile list item */
 .profile-item {
   display: flex;
@@ -1134,10 +1335,29 @@ table.table {
   .two-col-grid {
     grid-template-columns: 1fr;
   }
+  .job-dialog .form-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {
   .metric-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .job-dialog {
+    width: 95vw;
+  }
+  .job-dialog__header,
+  .job-dialog__body,
+  .job-dialog__footer {
+    padding-left: var(--space-3);
+    padding-right: var(--space-3);
+  }
+  .job-form-section__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .job-form-section__hint {
+    text-align: left;
   }
 }
