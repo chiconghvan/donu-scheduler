@@ -32,22 +32,7 @@ export default function RuntimeToastHost() {
       });
     }).then((u) => unlisteners.push(u));
 
-    listen<RuntimeDownloadProgressPayload>("runtime-download-progress", (event) => {
-      const { asset_name, downloaded_bytes, total_bytes } = event.payload;
-      const percent =
-        total_bytes && total_bytes > 0
-          ? Math.min(100, Math.floor((downloaded_bytes / total_bytes) * 100))
-          : null;
-      addToast({
-        type: "info",
-        title: "Runtime download",
-        message:
-          percent !== null
-            ? `Downloading ${asset_name}... ${percent}%`
-            : `Downloading ${asset_name}... ${downloaded_bytes} bytes`,
-        duration: 0,
-      });
-    }).then((u) => unlisteners.push(u));
+    listen<RuntimeDownloadProgressPayload>("runtime-download-progress", () => {}).then((u) => unlisteners.push(u));
 
     listen<RuntimeUpdateAvailablePayload>("runtime-update-available", (event) => {
       const { latest_version, asset_name } = event.payload;
@@ -139,16 +124,7 @@ export default function RuntimeToastHost() {
       });
     }).then((u) => unlisteners.push(u));
 
-    listen<AppUpdateDownloadProgressPayload>("app-update-download-progress", (event) => {
-      const { asset_name, downloaded_bytes, total_bytes } = event.payload;
-      const percent = total_bytes && total_bytes > 0 ? Math.min(100, Math.floor((downloaded_bytes / total_bytes) * 100)) : null;
-      addToast({
-        type: "info",
-        title: "App update download",
-        message: percent !== null ? `Downloading ${asset_name}... ${percent}%` : `Downloading ${asset_name}... ${downloaded_bytes} bytes`,
-        duration: 0,
-      });
-    }).then((u) => unlisteners.push(u));
+    listen<AppUpdateDownloadProgressPayload>("app-update-download-progress", () => {}).then((u) => unlisteners.push(u));
 
     listen<AppUpdateReadyPayload>("app-update-ready", (event) => {
       addToast({

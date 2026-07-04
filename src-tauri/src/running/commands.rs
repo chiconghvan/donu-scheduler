@@ -221,7 +221,17 @@ async fn close_profile(db_path: &PathBuf, manager: &str, profile_id: &str) -> Re
 
 fn kill_process_by_pid(pid: u32) -> Result<(), String> {
     #[cfg(target_os = "windows")]
-    { std::process::Command::new("taskkill").args(["/F", "/T", "/PID", &pid.to_string()]).output().map_err(|e| format!("Failed to kill process {pid}: {e}"))?; Ok(()) }
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        std::process::Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .map_err(|e| format!("Failed to kill process {pid}: {e}"))?;
+        Ok(())
+    }
     #[cfg(not(target_os = "windows"))]
     { unsafe { libc::kill(pid as i32, libc::SIGTERM); } Ok(()) }
 }

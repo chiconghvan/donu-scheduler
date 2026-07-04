@@ -412,8 +412,12 @@ fn is_runtime_running(process_registry: &Arc<Mutex<HashMap<String, u32>>>) -> bo
 
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         let output = std::process::Command::new("tasklist")
             .args(["/FI", "IMAGENAME eq donumate.exe", "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
             .output();
         if let Ok(output) = output {
             let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();

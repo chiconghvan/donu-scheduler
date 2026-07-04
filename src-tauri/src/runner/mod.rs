@@ -254,9 +254,13 @@ fn emit_log_entry(
 pub fn is_process_alive(pid: u32) -> bool {
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         let output = Command::new("tasklist")
             .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+            .creation_flags(CREATE_NO_WINDOW)
             .output();
         match output {
             Ok(out) => {
