@@ -112,6 +112,18 @@ export default function RuntimeToastHost() {
         title: "App update available",
         message: `${event.payload.current_version} -> ${event.payload.latest_version} (${event.payload.asset_name})`,
         duration: 0,
+        action: {
+          label: "Update",
+          onClick: () => {
+            if (!window.confirm(`Download app update ${event.payload.latest_version} in background?`)) return;
+            api.checkForAppUpdates().then((update) => {
+              if (!update) throw new Error("App update no longer available");
+              return api.downloadAndPrepareAppUpdate(update);
+            }).catch((err) => {
+              addToast({ type: "error", title: "App update download failed", message: String(err), duration: 10000 });
+            });
+          },
+        },
       });
     }).then((u) => unlisteners.push(u));
 
@@ -136,7 +148,7 @@ export default function RuntimeToastHost() {
           label: "Install",
           onClick: () => {
             if (!window.confirm(`Install app update ${event.payload.latest_version} and restart now?`)) return;
-            api.restartApplication(event.payload.installer_path).catch(() => {
+            api.restartApplication().catch(() => {
               addToast({ type: "error", title: "App restart failed", duration: 10000 });
             });
           },

@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter};
 
 const RELEASES_API_URL: &str = "https://api.github.com/repos/chiconghvan/donu-scheduler/releases?per_page=100";
 const UPDATE_DIR_NAME: &str = "updates";
+const PENDING_INSTALLER_PATH_KEY: &str = "pending_installer_path";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppUpdateInfo {
@@ -103,6 +104,7 @@ pub async fn check_for_app_updates_manual() -> Result<Option<AppUpdateInfo>, Str
 #[tauri::command]
 pub async fn download_and_prepare_app_update(
     app_handle: AppHandle,
+    state: tauri::State<'_, Arc<AppState>>,
     update: AppUpdateInfo,
 ) -> Result<AppUpdatePrepareResult, String> {
     let update_dir = app_update_dir();
@@ -118,6 +120,7 @@ pub async fn download_and_prepare_app_update(
     );
 
     download_update_file(&app_handle, &update, &installer_path).await?;
+    save_pending_installer_path(&state, &installer_path)?;
 
     let result = AppUpdatePrepareResult {
         latest_version: update.latest_version.clone(),
@@ -140,13 +143,19 @@ pub async fn download_and_prepare_app_update(
 }
 
 #[tauri::command]
-pub fn restart_application(app_handle: AppHandle, installer_path: Option<String>) -> Result<(), String> {
-    if let Some(path) = installer_path {
-        if !path.trim().is_empty() {
-            std::process::Command::new(path)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
+pub fn restart_application(
+    app_handle: AppHandle,
+    state: tauri::State<'_, Arc<AppState>>,
+    installer_path: Option<String>,
+) -> Result<(), String> {
+    let pending_path = match installer_path.filter(|path| !path.trim().is_empty()) {
+        Some(path) => Some(path),
+        None => load_pending_installer_path(&state)?,
+    };
+
+    if let Some(path) = pending_path {
+        spawn_silent_update_script(PathBuf::from(path))?;
+        clear_pending_installer_path(&state)?;
     }
     app_handle.exit(0);
     Ok(())
@@ -216,7 +225,8 @@ async fn check_latest_app_update() -> Result<Option<AppUpdateInfo>, String> {
 
     let asset = select_windows_asset(&latest.assets)
         .ok_or_else(|| format!("No Windows installer asset found for {}", latest.tag_name))?;
-    let manual_update_required = !asset.name.to_ascii_lowercase().ends_with(".exe");
+    let asset_name = asset.name.to_ascii_lowercase();
+    let manual_update_required = !asset_name.ends_with(".exe") && !asset_name.ends_with(".msi");
 
     Ok(Some(AppUpdateInfo {
         current_version: current,
@@ -285,6 +295,92 @@ fn app_update_dir() -> PathBuf {
     base.join("DonuScheduler").join(UPDATE_DIR_NAME)
 }
 
+fn save_pending_installer_path(
+    state: &tauri::State<'_, Arc<AppState>>,
+    installer_path: &Path,
+) -> Result<(), String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
+    crate::db::set_setting(
+        &conn,
+        PENDING_INSTALLER_PATH_KEY,
+        &installer_path.to_string_lossy(),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn load_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
+    Ok(crate::db::get_setting(&conn, PENDING_INSTALLER_PATH_KEY)
+        .ok()
+        .filter(|path| !path.trim().is_empty()))
+}
+
+fn clear_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Result<(), String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
+    crate::db::set_setting(&conn, PENDING_INSTALLER_PATH_KEY, "").map_err(|e| e.to_string())
+}
+
+fn spawn_silent_update_script(installer_path: PathBuf) -> Result<(), String> {
+    if !installer_path.exists() {
+        return Err(format!("Pending installer not found: {}", installer_path.display()));
+    }
+
+    let app_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let pid = std::process::id();
+    let script_path = app_update_dir().join("install_pending_update.cmd");
+    let installer_args = silent_installer_args(&installer_path)?;
+    let content = format!(
+        "@echo off\r\n\
+setlocal\r\n\
+set \"APP_PID={}\"\r\n\
+set \"INSTALLER={}\"\r\n\
+set \"APP_EXE={}\"\r\n\
+:wait_app\r\n\
+tasklist /fi \"PID eq %APP_PID%\" | findstr /r /c:\"[ ]%APP_PID%[ ]\" >nul\r\n\
+if not errorlevel 1 (\r\n\
+  timeout /t 1 /nobreak >nul\r\n\
+  goto wait_app\r\n\
+)\r\n\
+\"%INSTALLER%\" {}\r\n\
+start \"\" \"%APP_EXE%\"\r\n\
+endlocal\r\n",
+        pid,
+        batch_escape(&installer_path.to_string_lossy()),
+        batch_escape(&app_exe.to_string_lossy()),
+        installer_args,
+    );
+    std::fs::write(&script_path, content).map_err(|e| e.to_string())?;
+
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &script_path.to_string_lossy()])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn silent_installer_args(installer_path: &Path) -> Result<&'static str, String> {
+    match installer_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("exe") => Ok("/s /update"),
+        Some("msi") => Ok("/quiet"),
+        _ => Err(format!(
+            "Unsupported update installer type: {}",
+            installer_path.display()
+        )),
+    }
+}
+
+fn batch_escape(value: &str) -> String {
+    value.replace('%', "%%")
+}
+
 fn app_updates_disabled(state: &tauri::State<'_, Arc<AppState>>) -> Result<bool, String> {
     is_app_update_disabled(state.inner())
 }
@@ -313,6 +409,18 @@ fn select_windows_asset(assets: &[GithubAsset]) -> Option<GithubAsset> {
             candidates.clone().find(|asset| {
                 let name = asset.name.to_ascii_lowercase();
                 name.ends_with(".exe") && name.contains("setup")
+            })
+        })
+        .or_else(|| {
+            candidates.clone().find(|asset| {
+                let name = asset.name.to_ascii_lowercase();
+                name.ends_with(".msi") && name.contains("x64")
+            })
+        })
+        .or_else(|| {
+            candidates.clone().find(|asset| {
+                let name = asset.name.to_ascii_lowercase();
+                name.ends_with(".msi")
             })
         })
         .or_else(|| {

@@ -75,12 +75,12 @@ export default function SettingsPage() {
 
   async function downloadAppUpdate() {
     if (!appUpdate) return;
-    if (!window.confirm(`Download app update ${appUpdate.latest_version}?`)) return;
+    if (!window.confirm(`Download app update ${appUpdate.latest_version} in background?`)) return;
     setDownloadingApp(true);
     try {
       const prepared = await downloadAndPrepareAppUpdate(appUpdate);
       setPreparedUpdate(prepared);
-      addToast({ type: "success", title: "App update ready", message: prepared.asset_name });
+      addToast({ type: "success", title: "App update ready", message: `${prepared.asset_name}. Restart to install.` });
     } catch (err) {
       addToast({ type: "error", title: "App update download failed", message: String(err) });
     } finally {
@@ -100,7 +100,7 @@ export default function SettingsPage() {
       <Field label="Max Parallel Runtimes" type="number" value={String(settings.global_max_parallel_runtime)} onChange={(v) => setSettings({ ...settings, global_max_parallel_runtime: Number(v) || 1 })} />
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { if (window.confirm(`Install app update ${preparedUpdate.latest_version} and restart now?`)) void restartApplication(preparedUpdate.installer_path); }}>Install & Restart</button>}</div></div>
+      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { if (window.confirm(`Install app update ${preparedUpdate.latest_version} and restart now?`)) void restartApplication(); }}>Restart & Install</button>}</div></div>
       <div className="settings-option">
         <div className="settings-option__copy">
           <div className="settings-option__title">Auto check on startup</div>
