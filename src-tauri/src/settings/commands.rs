@@ -3,9 +3,7 @@ use crate::models::Settings;
 use std::sync::Arc;
 
 #[tauri::command]
-pub fn get_settings(
-    state: tauri::State<'_, Arc<AppState>>,
-) -> Result<Settings, String> {
+pub fn get_settings(state: tauri::State<'_, Arc<AppState>>) -> Result<Settings, String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::settings::repository::get_settings(&db_path)
 }

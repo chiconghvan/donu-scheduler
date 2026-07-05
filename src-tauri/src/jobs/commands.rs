@@ -38,10 +38,7 @@ pub fn update_job(
 }
 
 #[tauri::command]
-pub fn delete_job(
-    state: tauri::State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_job(state: tauri::State<'_, Arc<AppState>>, id: String) -> Result<(), String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::jobs::repository::delete_job(&db_path, &id)
 }

@@ -30,7 +30,9 @@ pub fn script_store_update(script_id: String) -> Result<ScriptStoreInstallResult
 }
 
 #[tauri::command]
-pub fn script_store_apply_pending_updates(app_handle: tauri::AppHandle) -> Result<Vec<ScriptStoreUpdateApplied>, String> {
+pub fn script_store_apply_pending_updates(
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<ScriptStoreUpdateApplied>, String> {
     let applied = crate::script_store::repository::apply_pending_updates()?;
     for item in &applied {
         let _ = app_handle.emit(

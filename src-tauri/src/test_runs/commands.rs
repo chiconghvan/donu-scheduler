@@ -43,7 +43,13 @@ pub async fn run_script_test(
 
     let now = now_iso();
     let run_id = new_id();
-    let log_path = crate::run_logs::prepare_log_path(&db_path_owned, &script.script_path, &profile_id, &run_id, &now)?;
+    let log_path = crate::run_logs::prepare_log_path(
+        &db_path_owned,
+        &script.script_path,
+        &profile_id,
+        &run_id,
+        &now,
+    )?;
 
     let test_run = TestRun {
         id: run_id.clone(),
@@ -127,7 +133,11 @@ pub async fn run_script_test(
             }
             return;
         }
-        let status_str = if result.exit_code == Some(0) { "success" } else { "failed" };
+        let status_str = if result.exit_code == Some(0) {
+            "success"
+        } else {
+            "failed"
+        };
 
         let _ = crate::test_runs::repository::update_test_run(
             &db_path_clone,
@@ -205,7 +215,13 @@ pub async fn run_batch_test(
                 group_name: None,
             });
         let run_id = new_id();
-        let log_path = crate::run_logs::prepare_log_path(&db_path_owned, &script.script_path, profile_id, &run_id, &now)?;
+        let log_path = crate::run_logs::prepare_log_path(
+            &db_path_owned,
+            &script.script_path,
+            profile_id,
+            &run_id,
+            &now,
+        )?;
 
         let test_run = TestRun {
             id: run_id.clone(),
@@ -275,7 +291,13 @@ pub async fn run_batch_test(
                             Some(pid),
                         );
                     }
-                    runner::wait_runtime(spawned, run_id_clone.clone(), app_handle_clone, log_registry).await
+                    runner::wait_runtime(
+                        spawned,
+                        run_id_clone.clone(),
+                        app_handle_clone,
+                        log_registry,
+                    )
+                    .await
                 }
                 Err(outcome) => outcome,
             };
@@ -290,17 +312,21 @@ pub async fn run_batch_test(
                 }
                 return;
             }
-            let status_str = if result.exit_code == Some(0) { "success" } else { "failed" };
+            let status_str = if result.exit_code == Some(0) {
+                "success"
+            } else {
+                "failed"
+            };
 
-        let _ = crate::test_runs::repository::update_test_run(
-            &db_path_clone,
-            &run_id_clone,
-            status_str,
-            &finished_at,
-            result.exit_code,
-            result.error_message.as_deref(),
-            result.log_path.as_deref(),
-        );
+            let _ = crate::test_runs::repository::update_test_run(
+                &db_path_clone,
+                &run_id_clone,
+                status_str,
+                &finished_at,
+                result.exit_code,
+                result.error_message.as_deref(),
+                result.log_path.as_deref(),
+            );
 
             if let Ok(mut reg) = registry.lock() {
                 reg.remove(&run_id_for_registry);
@@ -314,9 +340,7 @@ pub async fn run_batch_test(
 }
 
 #[tauri::command]
-pub fn list_test_runs(
-    state: tauri::State<'_, Arc<AppState>>,
-) -> Result<Vec<TestRun>, String> {
+pub fn list_test_runs(state: tauri::State<'_, Arc<AppState>>) -> Result<Vec<TestRun>, String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::test_runs::repository::list_test_runs(&db_path)
 }

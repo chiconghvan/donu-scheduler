@@ -1,6 +1,6 @@
 use crate::db::AppState;
-use crate::run_logs::LogEntry;
 use crate::models::RunHistoryItem;
+use crate::run_logs::LogEntry;
 use std::sync::Arc;
 
 #[tauri::command]
@@ -29,12 +29,9 @@ pub fn get_run_log_tail(
     after_seq: Option<u64>,
     max_lines: Option<usize>,
 ) -> Result<Vec<LogEntry>, String> {
-    if let Some(entries) = crate::run_logs::get_live_tail(
-        &state.log_registry,
-        &run_id,
-        after_seq,
-        max_lines,
-    )? {
+    if let Some(entries) =
+        crate::run_logs::get_live_tail(&state.log_registry, &run_id, after_seq, max_lines)?
+    {
         return Ok(entries);
     }
 

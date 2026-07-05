@@ -1,5 +1,5 @@
 use crate::db::open_db;
-use crate::models::{Script, ScriptInput, new_id, now_iso};
+use crate::models::{new_id, now_iso, Script, ScriptInput};
 use rusqlite::params;
 use std::path::PathBuf;
 
@@ -66,11 +66,7 @@ pub fn create_script(db_path: &PathBuf, input: &ScriptInput) -> Result<Script, S
     get_script(db_path, &id)
 }
 
-pub fn update_script(
-    db_path: &PathBuf,
-    id: &str,
-    input: &ScriptInput,
-) -> Result<Script, String> {
+pub fn update_script(db_path: &PathBuf, id: &str, input: &ScriptInput) -> Result<Script, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let now = now_iso();
 

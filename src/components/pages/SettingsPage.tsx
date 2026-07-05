@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Cpu, Download, Moon, Monitor, RefreshCw, Save, Settings as SettingsIcon, Sun } from "lucide-react";
-import { checkForAppUpdatesManual, downloadAndPrepareAppUpdate, getAppVersion, getRuntimeStatus, getSettings, restartApplication, updateRuntime, updateSettings } from "../../api";
+import { checkForAppUpdatesManual, downloadAndPrepareAppUpdate, getAppVersion, getPendingAppUpdate, getRuntimeStatus, getSettings, restartApplication, updateRuntime, updateSettings } from "../../api";
 import type { ThemeMode } from "../../hooks/useTheme";
 import type { AppUpdateInfo, AppUpdatePrepareResult, RuntimeStatus, Settings } from "../../types";
 import { useToast } from "../common/Toast";
@@ -27,10 +27,11 @@ export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsP
   async function load() {
     setLoading(true);
     try {
-      const [s, r, v] = await Promise.all([getSettings(), getRuntimeStatus(), getAppVersion()]);
+      const [s, r, v, pendingAppUpdate] = await Promise.all([getSettings(), getRuntimeStatus(), getAppVersion(), getPendingAppUpdate()]);
       setSettings(s);
       setRuntime(r);
       setAppVersion(v);
+      setPreparedUpdate(pendingAppUpdate);
     } catch (err) {
       addToast({ type: "error", title: "Load failed", message: String(err) });
     } finally {
@@ -154,11 +155,11 @@ export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsP
       </div>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><UpdateStatusPill available={Boolean(appUpdate)} /><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { void restartApplication(); }}>Restart & Install</button>}</div></div>
+      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><UpdateStatusPill available={Boolean(appUpdate || preparedUpdate)} /><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !appUpdate.manual_update_required && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { void restartApplication(); }}>Restart & Install</button>}</div></div>
       <div className="settings-option">
         <div className="settings-option__copy">
           <div className="settings-option__title">Auto check update</div>
-          <div className="settings-option__hint">Automatically checks GitHub for new app versions every 30 minutes. Downloads and installs still require confirmation.</div>
+          <div className="settings-option__hint">Automatically checks GitHub and downloads app updates in background. Installation starts only after Restart Now.</div>
         </div>
         <label className="toggle" aria-label="Auto check app updates">
           <input type="checkbox" checked={!settings.disable_auto_updates} onChange={(e) => setSettings({ ...settings, disable_auto_updates: !e.target.checked })} />

@@ -1,7 +1,10 @@
 use crate::db::open_db;
-use crate::models::{Script, ScriptInput, ScriptStoreCatalog, ScriptStoreCatalogItem, ScriptStoreInstallResult, ScriptStoreMetadata, ScriptStoreScript, ScriptStoreUpdateApplied, now_iso};
-use crate::script_store::types::ScriptInstallRecord;
+use crate::models::{
+    now_iso, Script, ScriptInput, ScriptStoreCatalog, ScriptStoreCatalogItem,
+    ScriptStoreInstallResult, ScriptStoreMetadata, ScriptStoreScript, ScriptStoreUpdateApplied,
+};
 use crate::script_store::types::GithubRelease;
+use crate::script_store::types::ScriptInstallRecord;
 use rusqlite::params;
 use std::collections::HashMap;
 use std::fs;
@@ -38,7 +41,13 @@ pub fn pending_script_path(script_id: &str, version: &str, entry: &str) -> PathB
 fn sanitize_filename(value: &str) -> String {
     value
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -66,14 +75,21 @@ pub fn read_manifest_from_release(token: &str) -> Result<ScriptStoreMetadata, St
         .ok_or_else(|| "metadata.json asset not found".to_string())?;
 
     let metadata_bytes = download_release_asset(token, metadata_asset.id)?;
-    let manifest: ScriptStoreMetadata = serde_json::from_slice(&metadata_bytes).map_err(|e| format!("Invalid metadata.json: {e}"))?;
+    let manifest: ScriptStoreMetadata = serde_json::from_slice(&metadata_bytes)
+        .map_err(|e| format!("Invalid metadata.json: {e}"))?;
     Ok(manifest)
 }
 
 fn client(token: &str) -> Result<reqwest::blocking::Client, String> {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(reqwest::header::ACCEPT, reqwest::header::HeaderValue::from_static("application/vnd.github+json"));
-    headers.insert(reqwest::header::HeaderName::from_static("x-github-api-version"), reqwest::header::HeaderValue::from_static("2022-11-28"));
+    headers.insert(
+        reqwest::header::ACCEPT,
+        reqwest::header::HeaderValue::from_static("application/vnd.github+json"),
+    );
+    headers.insert(
+        reqwest::header::HeaderName::from_static("x-github-api-version"),
+        reqwest::header::HeaderValue::from_static("2022-11-28"),
+    );
     if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}")) {
         headers.insert(reqwest::header::AUTHORIZATION, value);
     }
@@ -92,24 +108,29 @@ fn fetch_latest_release(token: &str) -> Result<GithubRelease, String> {
         .get(url)
         .send()
         .map_err(|e| e.to_string())?
-    .error_for_status()
-    .map_err(|e| e.to_string())?;
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
 
     response.json::<GithubRelease>().map_err(|e| e.to_string())
 }
 
 fn download_release_asset(token: &str, asset_id: u64) -> Result<Vec<u8>, String> {
     let client = client(token)?;
-    let url = format!("https://api.github.com/repos/{STORE_OWNER}/{STORE_REPO}/releases/assets/{asset_id}");
+    let url = format!(
+        "https://api.github.com/repos/{STORE_OWNER}/{STORE_REPO}/releases/assets/{asset_id}"
+    );
     let response = client
         .get(url)
         .header(reqwest::header::ACCEPT, "application/octet-stream")
         .send()
         .map_err(|e| e.to_string())?
-    .error_for_status()
-    .map_err(|e| e.to_string())?;
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
 
-    response.bytes().map(|b| b.to_vec()).map_err(|e| e.to_string())
+    response
+        .bytes()
+        .map(|b| b.to_vec())
+        .map_err(|e| e.to_string())
 }
 
 pub fn list_store_catalog(token: &str) -> Result<ScriptStoreCatalog, String> {
@@ -122,8 +143,7 @@ pub fn list_store_catalog(token: &str) -> Result<ScriptStoreCatalog, String> {
         let installed = install.is_some();
         let pending_update = install
             .map(|row| {
-                row.pending_version.as_deref().is_some()
-                    || row.pending_path.as_deref().is_some()
+                row.pending_version.as_deref().is_some() || row.pending_path.as_deref().is_some()
             })
             .unwrap_or(false);
         let update_available = install
@@ -222,7 +242,12 @@ fn resolve_script_asset(script: &ScriptStoreScript) -> String {
     }
 }
 
-fn ensure_script_row(db_path: &PathBuf, script: &ScriptStoreScript, installed_path: &str, default_inputs_json: &str) -> Result<Script, String> {
+fn ensure_script_row(
+    db_path: &PathBuf,
+    script: &ScriptStoreScript,
+    installed_path: &str,
+    default_inputs_json: &str,
+) -> Result<Script, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let existing_id: Option<String> = conn
         .query_row(
@@ -247,7 +272,10 @@ fn ensure_script_row(db_path: &PathBuf, script: &ScriptStoreScript, installed_pa
     }
 }
 
-pub fn install_or_stage_script(token: &str, script_id: &str) -> Result<ScriptStoreInstallResult, String> {
+pub fn install_or_stage_script(
+    token: &str,
+    script_id: &str,
+) -> Result<ScriptStoreInstallResult, String> {
     let release = fetch_latest_release(token)?;
     let manifest = read_manifest_from_release(token)?;
     let script = manifest
@@ -269,12 +297,20 @@ pub fn install_or_stage_script(token: &str, script_id: &str) -> Result<ScriptSto
 
     let db_path = app_dir().join("donu_scheduler.sqlite");
     let install_path = installed_script_path(&script.id, &asset_name);
-    let parent = install_path.parent().ok_or_else(|| "Invalid install path".to_string())?;
+    let parent = install_path
+        .parent()
+        .ok_or_else(|| "Invalid install path".to_string())?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     fs::write(&install_path, bytes).map_err(|e| e.to_string())?;
 
-    let default_inputs_json = extract_default_inputs_json(&install_path).unwrap_or_else(|_| "[]".to_string());
-    let script_row = ensure_script_row(&db_path, &script, &install_path.to_string_lossy(), &default_inputs_json)?;
+    let default_inputs_json =
+        extract_default_inputs_json(&install_path).unwrap_or_else(|_| "[]".to_string());
+    let script_row = ensure_script_row(
+        &db_path,
+        &script,
+        &install_path.to_string_lossy(),
+        &default_inputs_json,
+    )?;
 
     upsert_install_record(
         &db_path,
@@ -296,7 +332,10 @@ pub fn install_or_stage_script(token: &str, script_id: &str) -> Result<ScriptSto
     })
 }
 
-pub fn stage_script_update(token: &str, script_id: &str) -> Result<ScriptStoreInstallResult, String> {
+pub fn stage_script_update(
+    token: &str,
+    script_id: &str,
+) -> Result<ScriptStoreInstallResult, String> {
     let release = fetch_latest_release(token)?;
     let manifest = read_manifest_from_release(token)?;
     let script = manifest
@@ -318,7 +357,9 @@ pub fn stage_script_update(token: &str, script_id: &str) -> Result<ScriptStoreIn
 
     let db_path = app_dir().join("donu_scheduler.sqlite");
     let pending_path = pending_script_path(&script.id, &script.version, &asset_name);
-    let parent = pending_path.parent().ok_or_else(|| "Invalid pending path".to_string())?;
+    let parent = pending_path
+        .parent()
+        .ok_or_else(|| "Invalid pending path".to_string())?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     fs::write(&pending_path, bytes).map_err(|e| e.to_string())?;
 
@@ -379,7 +420,10 @@ pub fn apply_pending_updates() -> Result<Vec<ScriptStoreUpdateApplied>, String> 
     let mut applied = Vec::new();
     for row in rows {
         let record = row.map_err(|e| e.to_string())?;
-        let pending_path = record.pending_path.clone().ok_or_else(|| "Missing pending path".to_string())?;
+        let pending_path = record
+            .pending_path
+            .clone()
+            .ok_or_else(|| "Missing pending path".to_string())?;
         if !Path::new(&pending_path).exists() {
             continue;
         }
@@ -387,18 +431,25 @@ pub fn apply_pending_updates() -> Result<Vec<ScriptStoreUpdateApplied>, String> 
             id: record.store_script_id.clone(),
             name: record.name.clone(),
             description: String::new(),
-            version: record.pending_version.clone().unwrap_or_else(|| record.version.clone()),
+            version: record
+                .pending_version
+                .clone()
+                .unwrap_or_else(|| record.version.clone()),
             runtime: record.runtime.clone(),
             entry: record.asset_name.clone(),
             path: pending_path.clone(),
-            sha256: record.pending_sha256.clone().unwrap_or_else(|| record.sha256.clone()),
+            sha256: record
+                .pending_sha256
+                .clone()
+                .unwrap_or_else(|| record.sha256.clone()),
             min_app_version: String::new(),
             deprecated: false,
             updated_at: now_iso(),
         };
         let _ = script;
         fs::copy(&pending_path, &record.installed_path).map_err(|e| e.to_string())?;
-        let default_inputs_json = extract_default_inputs_json(Path::new(&record.installed_path)).unwrap_or_else(|_| "[]".to_string());
+        let default_inputs_json = extract_default_inputs_json(Path::new(&record.installed_path))
+            .unwrap_or_else(|_| "[]".to_string());
         let input = ScriptInput {
             name: record.name.clone(),
             description: String::new(),
@@ -453,10 +504,19 @@ fn extract_default_inputs_json(path: &Path) -> Result<String, String> {
                 if obj.get("type").and_then(|v| v.as_i64()) == Some(1) {
                     if let Some(raw_input) = obj.get("raw_input").and_then(|v| v.as_str()) {
                         if let Ok(raw) = serde_json::from_str::<Vec<serde_json::Value>>(raw_input) {
-                            let allow = raw.iter().any(|item| item.get("Key").and_then(|v| v.as_str()) == Some("ALLOW_USER_INPUT") && item.get("Value").and_then(|v| v.as_str()) == Some("True"));
+                            let allow = raw.iter().any(|item| {
+                                item.get("Key").and_then(|v| v.as_str()) == Some("ALLOW_USER_INPUT")
+                                    && item.get("Value").and_then(|v| v.as_str()) == Some("True")
+                            });
                             if allow {
                                 let get_val = |key: &str| {
-                                    raw.iter().find(|item| item.get("Key").and_then(|v| v.as_str()) == Some(key)).and_then(|item| item.get("Value")).cloned().unwrap_or(serde_json::Value::String(String::new()))
+                                    raw.iter()
+                                        .find(|item| {
+                                            item.get("Key").and_then(|v| v.as_str()) == Some(key)
+                                        })
+                                        .and_then(|item| item.get("Value"))
+                                        .cloned()
+                                        .unwrap_or(serde_json::Value::String(String::new()))
                                 };
                                 results.push(serde_json::json!({
                                     "name": obj.get("output_variable_name").and_then(|v| v.as_str()).unwrap_or(""),
@@ -482,7 +542,11 @@ fn extract_default_inputs_json(path: &Path) -> Result<String, String> {
         serde_json::Value::Array(nodes) => collect(&nodes, &mut inputs),
         serde_json::Value::Object(obj) => {
             for section in ["before_init", "main_logic"] {
-                if let Some(nodes) = obj.get(section).and_then(|v| v.get("nodes")).and_then(|v| v.as_array()) {
+                if let Some(nodes) = obj
+                    .get(section)
+                    .and_then(|v| v.get("nodes"))
+                    .and_then(|v| v.as_array())
+                {
                     collect(nodes, &mut inputs);
                 }
             }

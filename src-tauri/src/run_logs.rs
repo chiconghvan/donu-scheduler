@@ -82,7 +82,9 @@ pub fn cleanup_old_logs(db_path: &PathBuf) -> Result<(), String> {
     }
 
     let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(retention_days.saturating_mul(24 * 60 * 60)))
+        .checked_sub(Duration::from_secs(
+            retention_days.saturating_mul(24 * 60 * 60),
+        ))
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
     for entry in fs::read_dir(&logs_dir).map_err(|e| format!("Failed to read logs dir: {e}"))? {
@@ -100,7 +102,8 @@ pub fn cleanup_old_logs(db_path: &PathBuf) -> Result<(), String> {
         }
 
         let log_path = path.to_string_lossy().to_string();
-        fs::remove_file(&path).map_err(|e| format!("Failed to remove old log {}: {e}", path.display()))?;
+        fs::remove_file(&path)
+            .map_err(|e| format!("Failed to remove old log {}: {e}", path.display()))?;
         clear_log_path_references(&conn, &log_path)?;
     }
 
@@ -108,10 +111,16 @@ pub fn cleanup_old_logs(db_path: &PathBuf) -> Result<(), String> {
 }
 
 fn clear_log_path_references(conn: &rusqlite::Connection, log_path: &str) -> Result<(), String> {
-    conn.execute("UPDATE test_runs SET log_path=NULL WHERE log_path=?1", [log_path])
-        .map_err(|e| e.to_string())?;
-    conn.execute("UPDATE job_runs SET log_path=NULL WHERE log_path=?1", [log_path])
-        .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE test_runs SET log_path=NULL WHERE log_path=?1",
+        [log_path],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE job_runs SET log_path=NULL WHERE log_path=?1",
+        [log_path],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }
 

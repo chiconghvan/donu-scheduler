@@ -9,10 +9,12 @@ permissions:
   contents: write
 
 jobs:
-  release-windows:
-    name: Build Windows Release
+  windows:
+    name: Windows NSIS
     runs-on: windows-latest
-
+    env:
+      BUILD_TAG: ${{ github.ref_name }}
+      STABLE_RELEASE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +22,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Setup Rust
@@ -28,27 +30,14 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build Windows app
+        run: npm run tauri build -- --target x86_64-pc-windows-msvc --verbose
 
-      - name: Build Tauri app
-        env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-        run: npm run tauri build -- --target x86_64-pc-windows-msvc
-
-      - name: Collect artifacts
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path artifacts
-          Get-ChildItem -Path src-tauri/target/x86_64-pc-windows-msvc/release/bundle -Recurse -Include *.exe,*.msi,*.zip | ForEach-Object {
-            Copy-Item $_.FullName -Destination (Join-Path artifacts $_.Name) -Force
-          }
-
-      - name: Create GitHub Release
+      - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
-          generate_release_notes: true
+          files: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe

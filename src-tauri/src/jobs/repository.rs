@@ -108,11 +108,7 @@ pub fn create_job(db_path: &PathBuf, input: &JobInput) -> Result<JobDefinition, 
     get_job(db_path, &id)
 }
 
-pub fn update_job(
-    db_path: &PathBuf,
-    id: &str,
-    input: &JobInput,
-) -> Result<JobDefinition, String> {
+pub fn update_job(db_path: &PathBuf, id: &str, input: &JobInput) -> Result<JobDefinition, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let now = now_iso();
 
@@ -191,10 +187,7 @@ pub fn upsert_job_profile_state(
     get_job_profile_state(db_path, &id)
 }
 
-pub fn get_job_profile_state(
-    db_path: &PathBuf,
-    id: &str,
-) -> Result<JobProfileState, String> {
+pub fn get_job_profile_state(db_path: &PathBuf, id: &str) -> Result<JobProfileState, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     conn.query_row(
         "SELECT id, job_id, profile_id, date, target_count, run_count, success_count, failed_count, status, next_run_at, last_run_at, current_run_id, created_at, updated_at FROM job_profile_states WHERE id=?1",
@@ -352,11 +345,7 @@ pub fn update_job_run(
     Ok(())
 }
 
-pub fn update_job_run_pid(
-    db_path: &PathBuf,
-    run_id: &str,
-    pid: Option<u32>,
-) -> Result<(), String> {
+pub fn update_job_run_pid(db_path: &PathBuf, run_id: &str, pid: Option<u32>) -> Result<(), String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     conn.execute(
         "UPDATE job_runs SET pid=?1 WHERE id=?2",
@@ -366,10 +355,7 @@ pub fn update_job_run_pid(
     Ok(())
 }
 
-pub fn get_job_run_pid(
-    db_path: &PathBuf,
-    run_id: &str,
-) -> Result<Option<u32>, String> {
+pub fn get_job_run_pid(db_path: &PathBuf, run_id: &str) -> Result<Option<u32>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     conn.query_row(
         "SELECT pid FROM job_runs WHERE id=?1",
@@ -399,9 +385,7 @@ pub fn get_job_run_profile(db_path: &PathBuf, run_id: &str) -> Result<String, St
     .map_err(|e| e.to_string())
 }
 
-pub fn get_all_running_profile_states(
-    db_path: &PathBuf,
-) -> Result<Vec<JobProfileState>, String> {
+pub fn get_all_running_profile_states(db_path: &PathBuf) -> Result<Vec<JobProfileState>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT id, job_id, profile_id, date, target_count, run_count, success_count, failed_count, status, next_run_at, last_run_at, current_run_id, created_at, updated_at FROM job_profile_states WHERE status='running' AND current_run_id IS NOT NULL")

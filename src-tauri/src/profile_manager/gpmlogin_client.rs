@@ -5,7 +5,14 @@ pub struct GpmLoginClient {
 }
 
 fn display_browser_type(raw: Option<&str>) -> Option<String> {
-    raw.map(|value| if value.eq_ignore_ascii_case("camoufox") { "Firefox" } else { "Chrome" }.to_string())
+    raw.map(|value| {
+        if value.eq_ignore_ascii_case("camoufox") {
+            "Firefox"
+        } else {
+            "Chrome"
+        }
+        .to_string()
+    })
 }
 
 impl GpmLoginClient {
@@ -48,8 +55,7 @@ impl GpmLoginClient {
     pub async fn list_profiles(&self) -> Result<Vec<ProfileSummary>, String> {
         // Fetch groups first
         let groups = self.list_groups().await.unwrap_or_default();
-        let group_map: std::collections::HashMap<i64, String> =
-            groups.into_iter().collect();
+        let group_map: std::collections::HashMap<i64, String> = groups.into_iter().collect();
 
         let mut all_profiles = Vec::new();
         let mut page = 1;
@@ -112,7 +118,10 @@ impl GpmLoginClient {
             .map_err(|e| format!("GPM close profile request failed: {e}"))?;
 
         if !resp.status().is_success() {
-            return Err(format!("GPM close profile returned status: {}", resp.status()));
+            return Err(format!(
+                "GPM close profile returned status: {}",
+                resp.status()
+            ));
         }
 
         Ok(())

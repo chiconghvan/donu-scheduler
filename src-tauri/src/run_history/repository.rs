@@ -102,7 +102,8 @@ pub fn list_run_history(db_path: &PathBuf) -> Result<Vec<RunHistoryItem>, String
 
 pub fn get_run_history_log(db_path: &PathBuf, kind: &str, run_id: &str) -> Result<String, String> {
     let log_path = get_log_path(db_path, kind, run_id)?;
-    std::fs::read_to_string(&log_path).map_err(|e| format!("Failed to read log file {log_path}: {e}"))
+    std::fs::read_to_string(&log_path)
+        .map_err(|e| format!("Failed to read log file {log_path}: {e}"))
 }
 
 pub fn get_log_path(db_path: &PathBuf, kind: &str, run_id: &str) -> Result<String, String> {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useToast } from "../common/Toast";
 import * as api from "../../api";
@@ -20,6 +20,7 @@ import type {
 
 export default function RuntimeToastHost() {
   const { addToast } = useToast();
+  const downloadedAppVersions = useRef(new Set<string>());
 
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
@@ -144,19 +145,28 @@ export default function RuntimeToastHost() {
         key: "app-update-available",
         type: "info",
         title: "App update available",
-        message: `${event.payload.current_version} -> ${event.payload.latest_version} (${event.payload.asset_name})`,
-        duration: 0,
-        action: {
-          label: "Update",
-          onClick: () => {
-            api.checkForAppUpdates().then((update) => {
-              if (!update) throw new Error("App update no longer available");
-              return api.downloadAndPrepareAppUpdate(update);
-            }).catch((err) => {
-              addToast({ type: "error", title: "App update download failed", message: String(err), duration: 10000 });
-            });
-          },
-        },
+        message: `${event.payload.current_version} -> ${event.payload.latest_version} (${event.payload.asset_name}). Downloading in background...`,
+        duration: 8000,
+      });
+
+      if (downloadedAppVersions.current.has(event.payload.latest_version)) return;
+      downloadedAppVersions.current.add(event.payload.latest_version);
+      api.checkForAppUpdates().then((update) => {
+        if (!update) throw new Error("App update no longer available");
+        if (update.manual_update_required) {
+          addToast({
+            key: "app-update-manual",
+            type: "warning",
+            title: "Manual app update required",
+            message: `Download from ${update.release_url}`,
+            duration: 0,
+          });
+          return undefined;
+        }
+        return api.downloadAndPrepareAppUpdate(update);
+      }).catch((err) => {
+        downloadedAppVersions.current.delete(event.payload.latest_version);
+        addToast({ type: "error", title: "App update download failed", message: String(err), duration: 10000 });
       });
     }).then((u) => unlisteners.push(u));
 
@@ -191,12 +201,12 @@ export default function RuntimeToastHost() {
         key: "app-update-download",
         type: "success",
         title: "App update ready",
-        message: `${event.payload.asset_name} downloaded. Restart to install.`,
+        message: `${event.payload.asset_name} downloaded. Restart to install silently.`,
         progress: 100,
         progressClassName: "toast__progress--download",
         duration: 0,
         action: {
-          label: "Install",
+          label: "Restart Now",
           onClick: () => {
             api.restartApplication().catch(() => {
               addToast({ type: "error", title: "App restart failed", duration: 10000 });

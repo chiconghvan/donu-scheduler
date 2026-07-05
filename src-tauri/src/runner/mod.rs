@@ -1,10 +1,10 @@
 use serde::Serialize;
-use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tauri::Emitter;
 
 static LAST_RUNTIME_SPAWN_AT: OnceLock<tokio::sync::Mutex<Option<Instant>>> = OnceLock::new();
 
@@ -76,7 +76,9 @@ fn split_cli_args(input: &str) -> Vec<String> {
     args
 }
 
-pub async fn spawn_runtime_queued(request: &RunnerRequest) -> Result<SpawnedProcess, RunnerOutcome> {
+pub async fn spawn_runtime_queued(
+    request: &RunnerRequest,
+) -> Result<SpawnedProcess, RunnerOutcome> {
     let gate = LAST_RUNTIME_SPAWN_AT.get_or_init(|| tokio::sync::Mutex::new(None));
     let mut last_spawn_at = gate.lock().await;
 
@@ -295,13 +297,9 @@ fn emit_log_entry(
     line: &str,
     log_path: Option<&str>,
 ) {
-    if let Ok(entry) = crate::run_logs::append_live_entry(
-        log_registry,
-        run_id,
-        source,
-        line,
-        log_path,
-    ) {
+    if let Ok(entry) =
+        crate::run_logs::append_live_entry(log_registry, run_id, source, line, log_path)
+    {
         let _ = app_handle.emit(
             "log-stream",
             LogEventPayload {

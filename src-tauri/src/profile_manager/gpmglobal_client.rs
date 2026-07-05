@@ -5,7 +5,14 @@ pub struct GpmGlobalClient {
 }
 
 fn display_browser_type(raw: Option<&str>) -> Option<String> {
-    raw.map(|value| if value.eq_ignore_ascii_case("camoufox") { "Firefox" } else { "Chrome" }.to_string())
+    raw.map(|value| {
+        if value.eq_ignore_ascii_case("camoufox") {
+            "Firefox"
+        } else {
+            "Chrome"
+        }
+        .to_string()
+    })
 }
 
 impl GpmGlobalClient {
@@ -20,7 +27,10 @@ impl GpmGlobalClient {
             .map_err(|e| format!("GPMGlobal groups request failed: {e}"))?;
 
         if !resp.status().is_success() {
-            return Err(format!("GPMGlobal groups returned status: {}", resp.status()));
+            return Err(format!(
+                "GPMGlobal groups returned status: {}",
+                resp.status()
+            ));
         }
 
         let body: serde_json::Value = resp
@@ -43,8 +53,7 @@ impl GpmGlobalClient {
 
     pub async fn list_profiles(&self) -> Result<Vec<ProfileSummary>, String> {
         let groups = self.list_groups().await.unwrap_or_default();
-        let group_map: std::collections::HashMap<String, String> =
-            groups.into_iter().collect();
+        let group_map: std::collections::HashMap<String, String> = groups.into_iter().collect();
 
         let mut all_profiles = Vec::new();
         let mut page = 1;

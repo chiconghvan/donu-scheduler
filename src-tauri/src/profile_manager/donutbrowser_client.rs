@@ -5,7 +5,14 @@ pub struct DonutBrowserClient {
 }
 
 fn display_browser_type(raw: Option<&str>) -> Option<String> {
-    raw.map(|value| if value.eq_ignore_ascii_case("camoufox") { "Firefox" } else { "Chrome" }.to_string())
+    raw.map(|value| {
+        if value.eq_ignore_ascii_case("camoufox") {
+            "Firefox"
+        } else {
+            "Chrome"
+        }
+        .to_string()
+    })
 }
 
 impl DonutBrowserClient {
@@ -52,8 +59,7 @@ impl DonutBrowserClient {
     pub async fn list_profiles(&self) -> Result<Vec<ProfileSummary>, String> {
         // Fetch groups first
         let groups = self.list_groups().await.unwrap_or_default();
-        let group_map: std::collections::HashMap<String, String> =
-            groups.into_iter().collect();
+        let group_map: std::collections::HashMap<String, String> = groups.into_iter().collect();
 
         let url = format!("{}/v1/profiles", self.base_url);
         let resp = reqwest::get(&url)
@@ -61,10 +67,7 @@ impl DonutBrowserClient {
             .map_err(|e| format!("Donut Browser request failed: {e}"))?;
 
         if !resp.status().is_success() {
-            return Err(format!(
-                "Donut Browser returned status: {}",
-                resp.status()
-            ));
+            return Err(format!("Donut Browser returned status: {}", resp.status()));
         }
 
         let body: serde_json::Value = resp

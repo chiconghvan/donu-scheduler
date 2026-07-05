@@ -299,7 +299,8 @@ pub struct RandomConfig {
 
 impl ScheduleConfig {
     pub fn parse(json: &str) -> Result<Self, String> {
-        let cfg: Self = serde_json::from_str(json).map_err(|e| format!("Invalid schedule_json: {e}"))?;
+        let cfg: Self =
+            serde_json::from_str(json).map_err(|e| format!("Invalid schedule_json: {e}"))?;
         cfg.validate()?;
         Ok(cfg)
     }
@@ -330,9 +331,7 @@ impl ScheduleConfig {
             other => return Err(format!("Unsupported schedule type: {other}")),
         }
 
-        if self.active_days.is_empty()
-            || self.active_days.iter().any(|day| *day == 0 || *day > 7)
-        {
+        if self.active_days.is_empty() || self.active_days.iter().any(|day| *day == 0 || *day > 7) {
             return Err("active_days must contain values from 1 to 7".to_string());
         }
 
@@ -371,7 +370,11 @@ impl ScheduleConfig {
         match self.schedule_type.as_str() {
             "window_count" => self.runs_per_profile.unwrap_or(0),
             "fixed_interval" => 0,
-            "daily_times" => self.times.as_ref().map(|times| times.len() as i32).unwrap_or(0),
+            "daily_times" => self
+                .times
+                .as_ref()
+                .map(|times| times.len() as i32)
+                .unwrap_or(0),
             _ => 0,
         }
     }

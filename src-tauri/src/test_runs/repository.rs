@@ -50,7 +50,11 @@ pub fn insert_test_run(db_path: &PathBuf, run: &TestRun) -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_test_run_pid(db_path: &PathBuf, run_id: &str, pid: Option<u32>) -> Result<(), String> {
+pub fn update_test_run_pid(
+    db_path: &PathBuf,
+    run_id: &str,
+    pid: Option<u32>,
+) -> Result<(), String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     conn.execute(
         "UPDATE test_runs SET pid=?1, updated_at=?2 WHERE id=?3",
@@ -130,5 +134,6 @@ pub fn get_test_run_log(db_path: &PathBuf, run_id: &str) -> Result<String, Strin
         .map_err(|e| e.to_string())?;
 
     let log_path = log_path.ok_or_else(|| format!("Log path not found for test run: {run_id}"))?;
-    std::fs::read_to_string(&log_path).map_err(|e| format!("Failed to read log file {log_path}: {e}"))
+    std::fs::read_to_string(&log_path)
+        .map_err(|e| format!("Failed to read log file {log_path}: {e}"))
 }

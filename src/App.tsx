@@ -3,7 +3,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ToastProvider } from "./components/common/Toast";
 import { DialogProvider } from "./components/common/Dialog";
 import RuntimeToastHost from "./components/domain/RuntimeToastHost";
-import UpdateAvailableToast from "./components/domain/UpdateAvailableToast";
 import ActivityPage from "./components/pages/ActivityPage";
 import DashboardPage from "./components/pages/DashboardPage";
 import JobsPage from "./components/pages/JobsPage";
@@ -60,7 +59,6 @@ export default function App() {
           </div>
         </div>
         <RuntimeToastHost />
-        <UpdateAvailableToast />
       </DialogProvider>
     </ToastProvider>
   );

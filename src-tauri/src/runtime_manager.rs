@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 use std::sync::OnceLock;
+use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager};
 
 const RELEASE_API_URL: &str = "https://api.github.com/repos/chiconghvan/donumate/releases/latest";
@@ -112,23 +112,44 @@ pub fn spawn_runtime_manager(
 ) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        if let Err(e) = ensure_runtime_on_startup(app_handle.clone(), Arc::clone(&process_registry), Arc::clone(&state)).await {
-            let _ = app_handle.emit("runtime-update-error", RuntimeUpdateErrorPayload { message: e });
+        if let Err(e) = ensure_runtime_on_startup(
+            app_handle.clone(),
+            Arc::clone(&process_registry),
+            Arc::clone(&state),
+        )
+        .await
+        {
+            let _ = app_handle.emit(
+                "runtime-update-error",
+                RuntimeUpdateErrorPayload { message: e },
+            );
         }
 
         let mut last_release_check = std::time::Instant::now();
         loop {
             tokio::time::sleep(tokio::time::Duration::from_secs(20)).await;
-            if let Err(e) = apply_pending_update_if_possible(app_handle.clone(), Arc::clone(&process_registry)).await {
-                let _ = app_handle.emit("runtime-update-error", RuntimeUpdateErrorPayload { message: e });
+            if let Err(e) =
+                apply_pending_update_if_possible(app_handle.clone(), Arc::clone(&process_registry))
+                    .await
+            {
+                let _ = app_handle.emit(
+                    "runtime-update-error",
+                    RuntimeUpdateErrorPayload { message: e },
+                );
             }
             if last_release_check.elapsed() >= std::time::Duration::from_secs(30 * 60) {
                 last_release_check = std::time::Instant::now();
                 if runtime_updates_disabled(&state).unwrap_or(true) {
                     continue;
                 }
-                if let Err(e) = check_runtime_update(app_handle.clone(), Arc::clone(&process_registry), true).await {
-                    let _ = app_handle.emit("runtime-update-error", RuntimeUpdateErrorPayload { message: e });
+                if let Err(e) =
+                    check_runtime_update(app_handle.clone(), Arc::clone(&process_registry), true)
+                        .await
+                {
+                    let _ = app_handle.emit(
+                        "runtime-update-error",
+                        RuntimeUpdateErrorPayload { message: e },
+                    );
                 }
             }
         }
@@ -148,7 +169,13 @@ pub async fn update_runtime(
         return Ok(());
     }
 
-    install_runtime_asset(app_handle, Arc::clone(&state.process_registry), &asset, false).await
+    install_runtime_asset(
+        app_handle,
+        Arc::clone(&state.process_registry),
+        &asset,
+        false,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -159,7 +186,10 @@ pub async fn get_runtime_status() -> Result<RuntimeStatus, String> {
     let latest_asset_name = latest_asset.as_ref().map(|asset| asset.asset_name.clone());
     let update_available = latest_version
         .as_ref()
-        .map(|version| metadata.version.is_empty() || compare_versions(version, &metadata.version) == Ordering::Greater)
+        .map(|version| {
+            metadata.version.is_empty()
+                || compare_versions(version, &metadata.version) == Ordering::Greater
+        })
         .unwrap_or(false);
 
     Ok(RuntimeStatus {
@@ -211,7 +241,9 @@ async fn check_runtime_update(
 
     let asset = fetch_latest_runtime_asset().await?;
     let metadata = read_metadata().unwrap_or_default();
-    if metadata.version.is_empty() || compare_versions(&asset.version, &metadata.version) == Ordering::Greater {
+    if metadata.version.is_empty()
+        || compare_versions(&asset.version, &metadata.version) == Ordering::Greater
+    {
         if notify_available {
             let _ = app_handle.emit(
                 "runtime-update-available",
@@ -271,7 +303,13 @@ async fn install_runtime_asset(
         pending_asset_name: None,
         pending_path: None,
     })?;
-    emit_update_success(app_handle, asset.version.clone(), asset.asset_name.clone(), initial_install).await;
+    emit_update_success(
+        app_handle,
+        asset.version.clone(),
+        asset.asset_name.clone(),
+        initial_install,
+    )
+    .await;
     Ok(())
 }
 
@@ -366,9 +404,13 @@ async fn download_file(
 
     let total_bytes = response.content_length();
     let mut downloaded_bytes: u64 = 0;
-    let mut file = tokio::fs::File::create(&temp_path).await.map_err(|e| e.to_string())?;
+    let mut file = tokio::fs::File::create(&temp_path)
+        .await
+        .map_err(|e| e.to_string())?;
     while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
-        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| e.to_string())?;
+        tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
+            .await
+            .map_err(|e| e.to_string())?;
         downloaded_bytes += chunk.len() as u64;
         if let Some(app_handle) = &app_handle {
             let _ = app_handle.emit(
@@ -383,7 +425,9 @@ async fn download_file(
         }
     }
 
-    tokio::io::AsyncWriteExt::flush(&mut file).await.map_err(|e| e.to_string())?;
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if target_path.exists() {
         std::fs::remove_file(target_path).map_err(|e| e.to_string())?;
@@ -408,8 +452,13 @@ fn write_metadata(metadata: &RuntimeMetadata) -> Result<(), String> {
 }
 
 fn parse_runtime_version(asset_name: &str) -> Option<String> {
-    let version = asset_name.strip_prefix("donumate_v")?.strip_suffix(".exe")?;
-    if version.split('.').all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())) {
+    let version = asset_name
+        .strip_prefix("donumate_v")?
+        .strip_suffix(".exe")?;
+    if version
+        .split('.')
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+    {
         Some(version.to_string())
     } else {
         None
@@ -433,7 +482,10 @@ fn compare_versions(a: &str, b: &str) -> Ordering {
 
 fn is_runtime_running(process_registry: &Arc<Mutex<HashMap<String, u32>>>) -> bool {
     if let Ok(registry) = process_registry.lock() {
-        if registry.values().any(|pid| crate::runner::is_process_alive(*pid)) {
+        if registry
+            .values()
+            .any(|pid| crate::runner::is_process_alive(*pid))
+        {
             return true;
         }
     }
@@ -455,7 +507,11 @@ async fn emit_update_success(
         *last_version = Some(version.clone());
     }
 
-    let payload = RuntimeUpdateSuccessPayload { version, asset_name, initial_install };
+    let payload = RuntimeUpdateSuccessPayload {
+        version,
+        asset_name,
+        initial_install,
+    };
     let _ = app_handle.emit("runtime-update-success", payload);
 
     if !has_visible_window(&app_handle) {

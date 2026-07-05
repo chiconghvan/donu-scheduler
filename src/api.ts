@@ -113,6 +113,10 @@ export async function checkForAppUpdatesManual(): Promise<AppUpdateInfo | null> 
   return invoke("check_for_app_updates_manual");
 }
 
+export async function getPendingAppUpdate(): Promise<AppUpdatePrepareResult | null> {
+  return invoke("get_pending_app_update");
+}
+
 export async function downloadAndPrepareAppUpdate(
   update: AppUpdateInfo
 ): Promise<AppUpdatePrepareResult> {

@@ -3,12 +3,12 @@ mod db;
 mod input_cache;
 mod jobs;
 mod models;
-mod run_logs;
 mod profile_manager;
-mod runner;
-mod runtime_manager;
-mod running;
 mod run_history;
+mod run_logs;
+mod runner;
+mod running;
+mod runtime_manager;
 mod script_store;
 mod scripts;
 mod settings;
@@ -19,8 +19,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::Manager;
 use tauri::tray::TrayIconBuilder;
+use tauri::Manager;
 
 fn get_app_data_dir() -> PathBuf {
     let base = dirs::data_local_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -65,8 +65,16 @@ pub fn run() {
             let registry = Arc::clone(&state_handle.process_registry);
             let log_registry = Arc::clone(&state_handle.log_registry);
             let app_handle = app.handle().clone();
+            app_auto_updater::emit_pending_app_update_ready(
+                app_handle.clone(),
+                Arc::clone(&state_handle),
+            );
             app_auto_updater::spawn_app_update_check(app_handle.clone(), Arc::clone(&state_handle));
-            runtime_manager::spawn_runtime_manager(app_handle.clone(), Arc::clone(&registry), Arc::clone(&state_handle));
+            runtime_manager::spawn_runtime_manager(
+                app_handle.clone(),
+                Arc::clone(&registry),
+                Arc::clone(&state_handle),
+            );
             tauri::async_runtime::spawn(async move {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(20)).await;
@@ -180,6 +188,7 @@ pub fn run() {
             runtime_manager::get_runtime_status,
             runtime_manager::update_runtime,
             app_auto_updater::get_app_version,
+            app_auto_updater::get_pending_app_update,
             app_auto_updater::check_for_app_updates,
             app_auto_updater::check_for_app_updates_manual,
             app_auto_updater::download_and_prepare_app_update,
@@ -204,8 +213,11 @@ mod profile_manager_cmds {
         let (db_path_owned, base_url) = {
             let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
             let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
-            (db_path.clone(), crate::db::get_setting(&conn, "gpmlogin_api_base_url")
-                .unwrap_or_else(|_| "http://127.0.0.1:19995".to_string()))
+            (
+                db_path.clone(),
+                crate::db::get_setting(&conn, "gpmlogin_api_base_url")
+                    .unwrap_or_else(|_| "http://127.0.0.1:19995".to_string()),
+            )
         };
 
         let client = GpmLoginClient::new(base_url);
@@ -221,8 +233,11 @@ mod profile_manager_cmds {
         let (db_path_owned, base_url) = {
             let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
             let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
-            (db_path.clone(), crate::db::get_setting(&conn, "donutbrowser_api_base_url")
-                .unwrap_or_else(|_| "http://127.0.0.1:10108".to_string()))
+            (
+                db_path.clone(),
+                crate::db::get_setting(&conn, "donutbrowser_api_base_url")
+                    .unwrap_or_else(|_| "http://127.0.0.1:10108".to_string()),
+            )
         };
 
         let client = DonutBrowserClient::new(base_url);
@@ -238,8 +253,11 @@ mod profile_manager_cmds {
         let (db_path_owned, base_url) = {
             let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
             let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
-            (db_path.clone(), crate::db::get_setting(&conn, "gpmglobal_api_base_url")
-                .unwrap_or_else(|_| "http://127.0.0.1:9495".to_string()))
+            (
+                db_path.clone(),
+                crate::db::get_setting(&conn, "gpmglobal_api_base_url")
+                    .unwrap_or_else(|_| "http://127.0.0.1:9495".to_string()),
+            )
         };
 
         let client = GpmGlobalClient::new(base_url);
@@ -248,7 +266,10 @@ mod profile_manager_cmds {
         Ok(profiles)
     }
 
-    fn cache_profiles(db_path: &std::path::PathBuf, profiles: &[ProfileSummary]) -> Result<(), String> {
+    fn cache_profiles(
+        db_path: &std::path::PathBuf,
+        profiles: &[ProfileSummary],
+    ) -> Result<(), String> {
         let conn = crate::db::open_db(db_path).map_err(|e| e.to_string())?;
         for profile in profiles {
             let snapshot = crate::models::ProfileSnapshot {

@@ -8,9 +8,12 @@ use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-const RELEASES_API_URL: &str = "https://api.github.com/repos/chiconghvan/donu-scheduler/releases?per_page=100";
+const RELEASES_API_URL: &str =
+    "https://api.github.com/repos/chiconghvan/donu-scheduler/releases?per_page=100";
 const UPDATE_DIR_NAME: &str = "updates";
 const PENDING_INSTALLER_PATH_KEY: &str = "pending_installer_path";
+const PENDING_INSTALLER_VERSION_KEY: &str = "pending_installer_version";
+const PENDING_INSTALLER_ASSET_KEY: &str = "pending_installer_asset";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppUpdateInfo {
@@ -89,6 +92,13 @@ pub fn get_app_version() -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn get_pending_app_update(
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<Option<AppUpdatePrepareResult>, String> {
+    load_pending_app_update(&state)
+}
+
+#[tauri::command]
 pub async fn check_for_app_updates(
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<Option<AppUpdateInfo>, String> {
@@ -110,6 +120,10 @@ pub async fn download_and_prepare_app_update(
     state: tauri::State<'_, Arc<AppState>>,
     update: AppUpdateInfo,
 ) -> Result<AppUpdatePrepareResult, String> {
+    if update.manual_update_required {
+        return Err("Selected update asset requires manual installation".to_string());
+    }
+
     let update_dir = app_update_dir();
     std::fs::create_dir_all(&update_dir).map_err(|e| e.to_string())?;
     let installer_path = update_dir.join(&update.asset_name);
@@ -122,8 +136,11 @@ pub async fn download_and_prepare_app_update(
         },
     );
 
+    println!("Starting app update download: {}", update.asset_name);
     download_update_file(&app_handle, &update, &installer_path).await?;
-    save_pending_installer_path(&state, &installer_path)?;
+    println!("Silent download completed: {}", installer_path.display());
+    save_pending_installer(&state, &update, &installer_path)?;
+    println!("Pending installer saved: {}", installer_path.display());
 
     let result = AppUpdatePrepareResult {
         latest_version: update.latest_version.clone(),
@@ -132,6 +149,7 @@ pub async fn download_and_prepare_app_update(
         manual_update_required: update.manual_update_required,
     };
 
+    println!("Update ready: {}", result.latest_version);
     let _ = app_handle.emit(
         "app-update-ready",
         AppUpdateReadyPayload {
@@ -163,6 +181,29 @@ pub fn restart_application(
     Ok(())
 }
 
+pub fn emit_pending_app_update_ready(app_handle: AppHandle, state: Arc<AppState>) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        match load_pending_app_update_from_state(&state) {
+            Ok(Some(pending)) => {
+                let _ = app_handle.emit(
+                    "app-update-ready",
+                    AppUpdateReadyPayload {
+                        latest_version: pending.latest_version,
+                        asset_name: pending.asset_name,
+                        installer_path: pending.installer_path,
+                        manual_update_required: pending.manual_update_required,
+                    },
+                );
+            }
+            Ok(None) => {}
+            Err(e) => {
+                let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
+            }
+        }
+    });
+}
+
 pub fn spawn_app_update_check(app_handle: AppHandle, state: Arc<AppState>) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -170,26 +211,26 @@ pub fn spawn_app_update_check(app_handle: AppHandle, state: Arc<AppState>) {
         loop {
             match is_app_update_disabled(&state) {
                 Ok(true) => {}
-                Ok(false) => {
-                    match check_latest_app_update().await {
-                        Ok(Some(update)) => {
-                            let _ = app_handle.emit(
-                                "app-update-available",
-                                AppUpdateAvailablePayload {
-                                    current_version: update.current_version,
-                                    latest_version: update.latest_version,
-                                    asset_name: update.asset_name,
-                                },
-                            );
-                        }
-                        Ok(None) => {}
-                        Err(e) => {
-                            let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
-                        }
+                Ok(false) => match check_latest_app_update().await {
+                    Ok(Some(update)) => {
+                        let _ = app_handle.emit(
+                            "app-update-available",
+                            AppUpdateAvailablePayload {
+                                current_version: update.current_version,
+                                latest_version: update.latest_version,
+                                asset_name: update.asset_name,
+                            },
+                        );
                     }
-                }
+                    Ok(None) => {}
+                    Err(e) => {
+                        let _ = app_handle
+                            .emit("app-update-error", AppUpdateErrorPayload { message: e });
+                    }
+                },
                 Err(e) => {
-                    let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
+                    let _ =
+                        app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
                 }
             }
 
@@ -201,12 +242,15 @@ pub fn spawn_app_update_check(app_handle: AppHandle, state: Arc<AppState>) {
 async fn check_latest_app_update() -> Result<Option<AppUpdateInfo>, String> {
     let current = current_version();
     if current.starts_with("dev-") {
+        println!("App update skipped: dev build ({current})");
         return Ok(None);
     }
     if parse_stable_version(&current).is_none() {
+        println!("App update skipped: unsupported version ({current})");
         return Ok(None);
     }
 
+    println!("=== App Update Check ===");
     let releases = reqwest::Client::new()
         .get(RELEASES_API_URL)
         .header(reqwest::header::USER_AGENT, "DonuScheduler")
@@ -219,13 +263,20 @@ async fn check_latest_app_update() -> Result<Option<AppUpdateInfo>, String> {
         .await
         .map_err(|e| e.to_string())?;
 
+    println!("Fetched {} releases from GitHub", releases.len());
+
     let latest = releases
         .into_iter()
-        .filter(|release| !release.draft && !release.prerelease && parse_stable_version(&release.tag_name).is_some())
+        .filter(|release| {
+            !release.draft
+                && !release.prerelease
+                && parse_stable_version(&release.tag_name).is_some()
+        })
         .max_by(|a, b| compare_versions(&stable_part(&a.tag_name), &stable_part(&b.tag_name)))
         .ok_or_else(|| "No stable DonuScheduler release found".to_string())?;
 
-    if compare_versions(&stable_part(&latest.tag_name), &stable_part(&current)) != Ordering::Greater {
+    if compare_versions(&stable_part(&latest.tag_name), &stable_part(&current)) != Ordering::Greater
+    {
         return Ok(None);
     }
 
@@ -233,6 +284,11 @@ async fn check_latest_app_update() -> Result<Option<AppUpdateInfo>, String> {
         .ok_or_else(|| format!("No Windows installer asset found for {}", latest.tag_name))?;
     let asset_name = asset.name.to_ascii_lowercase();
     let manual_update_required = !asset_name.ends_with(".exe") && !asset_name.ends_with(".msi");
+
+    println!(
+        "Update available: {} -> {} ({})",
+        current, latest.tag_name, asset.name
+    );
 
     Ok(Some(AppUpdateInfo {
         current_version: current,
@@ -267,7 +323,9 @@ async fn download_update_file(
 
     let total_bytes = response.content_length();
     let mut downloaded_bytes = 0_u64;
-    let mut file = tokio::fs::File::create(&temp_path).await.map_err(|e| e.to_string())?;
+    let mut file = tokio::fs::File::create(&temp_path)
+        .await
+        .map_err(|e| e.to_string())?;
     while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
         tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
             .await
@@ -283,7 +341,9 @@ async fn download_update_file(
             },
         );
     }
-    tokio::io::AsyncWriteExt::flush(&mut file).await.map_err(|e| e.to_string())?;
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if target_path.exists() {
         std::fs::remove_file(target_path).map_err(|e| e.to_string())?;
@@ -301,8 +361,9 @@ fn app_update_dir() -> PathBuf {
     base.join("DonuScheduler").join(UPDATE_DIR_NAME)
 }
 
-fn save_pending_installer_path(
+fn save_pending_installer(
     state: &tauri::State<'_, Arc<AppState>>,
+    update: &AppUpdateInfo,
     installer_path: &Path,
 ) -> Result<(), String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
@@ -312,10 +373,17 @@ fn save_pending_installer_path(
         PENDING_INSTALLER_PATH_KEY,
         &installer_path.to_string_lossy(),
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    crate::db::set_setting(&conn, PENDING_INSTALLER_VERSION_KEY, &update.latest_version)
+        .map_err(|e| e.to_string())?;
+    crate::db::set_setting(&conn, PENDING_INSTALLER_ASSET_KEY, &update.asset_name)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
-fn load_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
+fn load_pending_installer_path(
+    state: &tauri::State<'_, Arc<AppState>>,
+) -> Result<Option<String>, String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
     let pending_path = crate::db::get_setting(&conn, PENDING_INSTALLER_PATH_KEY)
@@ -323,16 +391,70 @@ fn load_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Resul
         .filter(|path| !path.trim().is_empty());
     if let Some(path) = pending_path.as_deref() {
         if !Path::new(path).exists() {
-            crate::db::set_setting(&conn, PENDING_INSTALLER_PATH_KEY, "").map_err(|e| e.to_string())?;
+            crate::db::set_setting(&conn, PENDING_INSTALLER_PATH_KEY, "")
+                .map_err(|e| e.to_string())?;
+            crate::db::set_setting(&conn, PENDING_INSTALLER_VERSION_KEY, "")
+                .map_err(|e| e.to_string())?;
+            crate::db::set_setting(&conn, PENDING_INSTALLER_ASSET_KEY, "")
+                .map_err(|e| e.to_string())?;
             return Ok(None);
         }
     }
     Ok(pending_path)
 }
 
+fn load_pending_app_update(
+    state: &tauri::State<'_, Arc<AppState>>,
+) -> Result<Option<AppUpdatePrepareResult>, String> {
+    load_pending_app_update_from_state(state.inner())
+}
+
+fn load_pending_app_update_from_state(
+    state: &Arc<AppState>,
+) -> Result<Option<AppUpdatePrepareResult>, String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
+    let pending_path = crate::db::get_setting(&conn, PENDING_INSTALLER_PATH_KEY)
+        .ok()
+        .filter(|path| !path.trim().is_empty());
+    let Some(installer_path) = pending_path else {
+        return Ok(None);
+    };
+
+    if !Path::new(&installer_path).exists() {
+        crate::db::set_setting(&conn, PENDING_INSTALLER_PATH_KEY, "").map_err(|e| e.to_string())?;
+        crate::db::set_setting(&conn, PENDING_INSTALLER_VERSION_KEY, "")
+            .map_err(|e| e.to_string())?;
+        crate::db::set_setting(&conn, PENDING_INSTALLER_ASSET_KEY, "")
+            .map_err(|e| e.to_string())?;
+        return Ok(None);
+    }
+
+    let latest_version = crate::db::get_setting(&conn, PENDING_INSTALLER_VERSION_KEY)
+        .unwrap_or_else(|_| "pending".to_string());
+    let asset_name =
+        crate::db::get_setting(&conn, PENDING_INSTALLER_ASSET_KEY).unwrap_or_else(|_| {
+            Path::new(&installer_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("installer")
+                .to_string()
+        });
+
+    Ok(Some(AppUpdatePrepareResult {
+        latest_version,
+        asset_name,
+        installer_path,
+        manual_update_required: false,
+    }))
+}
+
 fn spawn_silent_update_script(installer_path: PathBuf) -> Result<(), String> {
     if !installer_path.exists() {
-        return Err(format!("Pending installer not found: {}", installer_path.display()));
+        return Err(format!(
+            "Pending installer not found: {}",
+            installer_path.display()
+        ));
     }
 
     let app_exe = std::env::current_exe().map_err(|e| e.to_string())?;
@@ -348,47 +470,39 @@ set \"INSTALLER={}\"\r\n\
 set \"APP_EXE={}\"\r\n\
 set \"LOG_PATH={}\"\r\n\
 set \"INSTALLER_KIND={}\"\r\n\
-for %%I in (\"%APP_EXE%\") do set \"APP_DIR=%%~dpI\"\r\n\
+set \"WAIT_SECONDS=0\"\r\n\
 :wait_app\r\n\
 tasklist /fi \"PID eq %APP_PID%\" | findstr /r /c:\"[ ]%APP_PID%[ ]\" >nul\r\n\
 if not errorlevel 1 (\r\n\
+  if !WAIT_SECONDS! geq 120 (\r\n\
+    echo [%date% %time%] Timed out waiting for app PID %APP_PID% >> \"%LOG_PATH%\"\r\n\
+    exit /b 1460\r\n\
+  )\r\n\
   timeout /t 1 /nobreak >nul\r\n\
+  set /a WAIT_SECONDS+=1\r\n\
   goto wait_app\r\n\
 )\r\n\
 echo [%date% %time%] Starting silent update > \"%LOG_PATH%\"\r\n\
 echo [%date% %time%] App exe: \"%APP_EXE%\" >> \"%LOG_PATH%\"\r\n\
 echo [%date% %time%] Installer: \"%INSTALLER%\" >> \"%LOG_PATH%\"\r\n\
 if /i \"%INSTALLER_KIND%\"==\"exe\" (\r\n\
-  set \"UNINSTALLER=\"\r\n\
-  if exist \"%APP_DIR%uninstall.exe\" set \"UNINSTALLER=%APP_DIR%uninstall.exe\"\r\n\
-  if not defined UNINSTALLER if exist \"%APP_DIR%Uninstall.exe\" set \"UNINSTALLER=%APP_DIR%Uninstall.exe\"\r\n\
-  if not defined UNINSTALLER if exist \"%APP_DIR%Uninstall DonuScheduler.exe\" set \"UNINSTALLER=%APP_DIR%Uninstall DonuScheduler.exe\"\r\n\
-  if not defined UNINSTALLER if exist \"%APP_DIR%DonuScheduler Uninstall.exe\" set \"UNINSTALLER=%APP_DIR%DonuScheduler Uninstall.exe\"\r\n\
-  if not defined UNINSTALLER if exist \"%APP_DIR%unins000.exe\" set \"UNINSTALLER=%APP_DIR%unins000.exe\"\r\n\
-  if defined UNINSTALLER (\r\n\
-    echo [%date% %time%] Running uninstaller: \"%UNINSTALLER%\" /S >> \"%LOG_PATH%\"\r\n\
-    \"%UNINSTALLER%\" /S >> \"%LOG_PATH%\" 2>&1\r\n\
-    set \"UNINSTALL_EXIT=!ERRORLEVEL!\"\r\n\
-    echo [%date% %time%] Uninstaller exit code: !UNINSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
-    if not \"!UNINSTALL_EXIT!\"==\"0\" (\r\n\
-      exit /b !UNINSTALL_EXIT!\r\n\
-    )\r\n\
-  ) else (\r\n\
-    echo [%date% %time%] No uninstaller found; installer will run over existing install >> \"%LOG_PATH%\"\r\n\
-  )\r\n\
-  echo [%date% %time%] Running NSIS installer: \"%INSTALLER%\" /S >> \"%LOG_PATH%\"\r\n\
-  \"%INSTALLER%\" /S >> \"%LOG_PATH%\" 2>&1\r\n\
+  echo [%date% %time%] Running NSIS installer: \"%INSTALLER%\" /S /UPDATE >> \"%LOG_PATH%\"\r\n\
+  start \"\" /wait \"%INSTALLER%\" /S /UPDATE >> \"%LOG_PATH%\" 2>&1\r\n\
   set \"INSTALL_EXIT=!ERRORLEVEL!\"\r\n\
 ) else (\r\n\
-  echo [%date% %time%] Running MSI installer: msiexec /i \"%INSTALLER%\" /quiet /norestart >> \"%LOG_PATH%\"\r\n\
-  msiexec /i \"%INSTALLER%\" /quiet /norestart >> \"%LOG_PATH%\" 2>&1\r\n\
+  echo [%date% %time%] Running MSI installer: msiexec /i \"%INSTALLER%\" /quiet /norestart /promptrestart >> \"%LOG_PATH%\"\r\n\
+  start \"\" /wait \"%SystemRoot%\\System32\\msiexec.exe\" /i \"%INSTALLER%\" /quiet /norestart /promptrestart >> \"%LOG_PATH%\" 2>&1\r\n\
   set \"INSTALL_EXIT=!ERRORLEVEL!\"\r\n\
 )\r\n\
 echo [%date% %time%] Installer exit code: !INSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
 if \"!INSTALL_EXIT!\"==\"0\" (\r\n\
   del /f /q \"%INSTALLER%\" >> \"%LOG_PATH%\" 2>&1\r\n\
   start \"\" \"%APP_EXE%\"\r\n\
+) else if \"!INSTALL_EXIT!\"==\"3010\" (\r\n\
+  del /f /q \"%INSTALLER%\" >> \"%LOG_PATH%\" 2>&1\r\n\
+  start \"\" \"%APP_EXE%\"\r\n\
 )\r\n\
+del \"%~f0\"\r\n\
 exit /b !INSTALL_EXIT!\r\n\
 endlocal\r\n",
         pid,
@@ -412,9 +526,7 @@ endlocal\r\n",
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    command
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    command.spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -453,7 +565,10 @@ fn is_app_update_disabled(state: &Arc<AppState>) -> Result<bool, String> {
 fn select_windows_asset(assets: &[GithubAsset]) -> Option<GithubAsset> {
     let mut candidates = assets.iter().filter(|asset| {
         let name = asset.name.to_ascii_lowercase();
-        name.contains("windows") || name.contains("win") || name.contains("x64") || name.contains("setup")
+        name.contains("windows")
+            || name.contains("win")
+            || name.contains("x64")
+            || name.contains("setup")
     });
 
     candidates

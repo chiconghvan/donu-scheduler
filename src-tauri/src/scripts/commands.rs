@@ -9,10 +9,7 @@ pub fn list_scripts(state: tauri::State<'_, Arc<AppState>>) -> Result<Vec<Script
 }
 
 #[tauri::command]
-pub fn get_script(
-    state: tauri::State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<Script, String> {
+pub fn get_script(state: tauri::State<'_, Arc<AppState>>, id: String) -> Result<Script, String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::scripts::repository::get_script(&db_path, &id)
 }
@@ -37,21 +34,21 @@ pub fn update_script(
 }
 
 #[tauri::command]
-pub fn delete_script(
-    state: tauri::State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_script(state: tauri::State<'_, Arc<AppState>>, id: String) -> Result<(), String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::scripts::repository::delete_script(&db_path, &id)
 }
 
 #[tauri::command]
-pub fn open_file_dialog(filter_name: String, filter_extensions: Vec<String>) -> Result<Option<String>, String> {
+pub fn open_file_dialog(
+    filter_name: String,
+    filter_extensions: Vec<String>,
+) -> Result<Option<String>, String> {
     let mut dialog = rfd::FileDialog::new();
     if !filter_extensions.is_empty() {
         dialog = dialog.add_filter(&filter_name, &filter_extensions);
     }
-    
+
     match dialog.pick_file() {
         Some(path) => Ok(Some(path.to_string_lossy().to_string())),
         None => Ok(None),

@@ -1,5 +1,5 @@
-use rusqlite::{Connection, Result as SqlResult};
 use crate::run_logs::LogRegistry;
+use rusqlite::{Connection, Result as SqlResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -142,7 +142,8 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
             stmt.query_map([], |row| row.get::<_, String>(1))
                 .ok()
                 .map(|cols| {
-                    cols.filter_map(|c| c.ok()).any(|c| c == "default_inputs_json")
+                    cols.filter_map(|c| c.ok())
+                        .any(|c| c == "default_inputs_json")
                 })
         })
         .unwrap_or(false);
@@ -210,7 +211,9 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         .unwrap_or(false);
 
     if !has_manager_col {
-        conn.execute_batch("ALTER TABLE test_runs ADD COLUMN manager TEXT NOT NULL DEFAULT 'donut';")?;
+        conn.execute_batch(
+            "ALTER TABLE test_runs ADD COLUMN manager TEXT NOT NULL DEFAULT 'donut';",
+        )?;
     }
 
     let has_test_profile_name_col: bool = conn
@@ -224,7 +227,9 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         .unwrap_or(false);
 
     if !has_test_profile_name_col {
-        conn.execute_batch("ALTER TABLE test_runs ADD COLUMN profile_name TEXT NOT NULL DEFAULT '';")?;
+        conn.execute_batch(
+            "ALTER TABLE test_runs ADD COLUMN profile_name TEXT NOT NULL DEFAULT '';",
+        )?;
     }
 
     let has_test_group_name_col: bool = conn
@@ -252,7 +257,9 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         .unwrap_or(false);
 
     if !has_job_profile_name_col {
-        conn.execute_batch("ALTER TABLE job_runs ADD COLUMN profile_name TEXT NOT NULL DEFAULT '';")?;
+        conn.execute_batch(
+            "ALTER TABLE job_runs ADD COLUMN profile_name TEXT NOT NULL DEFAULT '';",
+        )?;
     }
 
     let has_job_group_name_col: bool = conn
@@ -339,11 +346,16 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         .and_then(|mut stmt| {
             stmt.query_map([], |row| row.get::<_, String>(1))
                 .ok()
-                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_source_tag"))
+                .map(|cols| {
+                    cols.filter_map(|c| c.ok())
+                        .any(|c| c == "pending_source_tag")
+                })
         })
         .unwrap_or(false);
     if !has_store_pending_source_tag {
-        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_source_tag TEXT;")?;
+        conn.execute_batch(
+            "ALTER TABLE script_store_installs ADD COLUMN pending_source_tag TEXT;",
+        )?;
     }
 
     let has_store_pending_asset_name: bool = conn
@@ -352,11 +364,16 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         .and_then(|mut stmt| {
             stmt.query_map([], |row| row.get::<_, String>(1))
                 .ok()
-                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "pending_asset_name"))
+                .map(|cols| {
+                    cols.filter_map(|c| c.ok())
+                        .any(|c| c == "pending_asset_name")
+                })
         })
         .unwrap_or(false);
     if !has_store_pending_asset_name {
-        conn.execute_batch("ALTER TABLE script_store_installs ADD COLUMN pending_asset_name TEXT;")?;
+        conn.execute_batch(
+            "ALTER TABLE script_store_installs ADD COLUMN pending_asset_name TEXT;",
+        )?;
     }
 
     // Migration: create input_cache table if not exists
@@ -374,11 +391,9 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
 }
 
 pub fn get_setting(conn: &Connection, key: &str) -> SqlResult<String> {
-    conn.query_row(
-        "SELECT value FROM settings WHERE key = ?1",
-        [key],
-        |row| row.get(0),
-    )
+    conn.query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+        row.get(0)
+    })
 }
 
 pub fn set_setting(conn: &Connection, key: &str, value: &str) -> SqlResult<()> {
@@ -389,7 +404,10 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> SqlResult<()> {
     Ok(())
 }
 
-pub fn upsert_profile_cache(conn: &Connection, snapshot: &crate::models::ProfileSnapshot) -> SqlResult<()> {
+pub fn upsert_profile_cache(
+    conn: &Connection,
+    snapshot: &crate::models::ProfileSnapshot,
+) -> SqlResult<()> {
     conn.execute(
         "INSERT OR REPLACE INTO profile_cache (profile_id, manager, profile_name, group_name, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params![snapshot.profile_id, snapshot.manager, snapshot.profile_name, snapshot.group_name, crate::models::now_iso()],
@@ -398,7 +416,11 @@ pub fn upsert_profile_cache(conn: &Connection, snapshot: &crate::models::Profile
 }
 
 #[allow(dead_code)]
-pub fn get_cached_profile(conn: &Connection, profile_id: &str, manager: &str) -> SqlResult<Option<(String, Option<String>)>> {
+pub fn get_cached_profile(
+    conn: &Connection,
+    profile_id: &str,
+    manager: &str,
+) -> SqlResult<Option<(String, Option<String>)>> {
     let result = conn.query_row(
         "SELECT profile_name, group_name FROM profile_cache WHERE profile_id = ?1 AND manager = ?2",
         rusqlite::params![profile_id, manager],

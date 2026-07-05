@@ -23,7 +23,15 @@ pub async fn scheduler_tick(
     };
 
     for job in jobs {
-        if let Err(e) = process_job(&db_path, &job, &process_registry, &log_registry, &app_handle).await {
+        if let Err(e) = process_job(
+            &db_path,
+            &job,
+            &process_registry,
+            &log_registry,
+            &app_handle,
+        )
+        .await
+        {
             eprintln!("[scheduler] Error processing job {}: {e}", job.id);
         }
     }
@@ -125,11 +133,8 @@ async fn process_job(
 
     for profile in &profiles {
         let today = crate::models::today_iso();
-        let latest_state = crate::jobs::repository::get_latest_job_profile_state(
-            db_path,
-            &job.id,
-            &profile.id,
-        )?;
+        let latest_state =
+            crate::jobs::repository::get_latest_job_profile_state(db_path, &job.id, &profile.id)?;
         let state = crate::jobs::repository::upsert_job_profile_state(
             db_path,
             &job.id,
@@ -146,25 +151,26 @@ async fn process_job(
             continue;
         }
 
-        let next_run = match next_run_for_state(&schedule, &random_cfg, &state, latest_state.as_ref(), now)? {
-            Some(next_run) => next_run,
-            None => {
-                if let Some(status) = terminal_status_for_state(&schedule, &state, now) {
-                    crate::jobs::repository::update_job_profile_state(
-                        db_path,
-                        &state.id,
-                        state.run_count,
-                        state.success_count,
-                        state.failed_count,
-                        status,
-                        None,
-                        &state.last_run_at.clone().unwrap_or_default(),
-                        None,
-                    )?;
+        let next_run =
+            match next_run_for_state(&schedule, &random_cfg, &state, latest_state.as_ref(), now)? {
+                Some(next_run) => next_run,
+                None => {
+                    if let Some(status) = terminal_status_for_state(&schedule, &state, now) {
+                        crate::jobs::repository::update_job_profile_state(
+                            db_path,
+                            &state.id,
+                            state.run_count,
+                            state.success_count,
+                            state.failed_count,
+                            status,
+                            None,
+                            &state.last_run_at.clone().unwrap_or_default(),
+                            None,
+                        )?;
+                    }
+                    continue;
                 }
-                continue;
-            }
-        };
+            };
 
         if now < next_run {
             let next_run_str = next_run.format("%Y-%m-%dT%H:%M:%S").to_string();
@@ -188,7 +194,13 @@ async fn process_job(
         let run_id = crate::models::new_id();
         let now_str = crate::models::now_iso();
         let script_path = job.script_path_for_run(db_path).unwrap_or_default();
-        let log_path = crate::run_logs::prepare_log_path(db_path, &script_path, &profile.id, &run_id, &now_str)?;
+        let log_path = crate::run_logs::prepare_log_path(
+            db_path,
+            &script_path,
+            &profile.id,
+            &run_id,
+            &now_str,
+        )?;
         let profile_name = profile.name.clone().unwrap_or_else(|| profile.id.clone());
         let group_name = profile.group_name.clone();
 
@@ -285,7 +297,13 @@ async fn process_job(
                             Some(pid),
                         );
                     }
-                    runner::wait_runtime(spawned, run_id_clone.clone(), app_handle_clone, log_registry).await
+                    runner::wait_runtime(
+                        spawned,
+                        run_id_clone.clone(),
+                        app_handle_clone,
+                        log_registry,
+                    )
+                    .await
                 }
                 Err(outcome) => outcome,
             };
@@ -300,7 +318,11 @@ async fn process_job(
                 }
                 return;
             }
-            let status_str = if result.exit_code == Some(0) { "success" } else { "failed" };
+            let status_str = if result.exit_code == Some(0) {
+                "success"
+            } else {
+                "failed"
+            };
 
             let _ = crate::jobs::repository::update_job_run(
                 &db_path_clone,
@@ -377,8 +399,12 @@ fn next_window_count(
         return Ok(None);
     }
 
-    let start = schedule.window_start_today().ok_or("Invalid schedule start_time")?;
-    let end = schedule.window_end_today().ok_or("Invalid schedule end_time")?;
+    let start = schedule
+        .window_start_today()
+        .ok_or("Invalid schedule start_time")?;
+    let end = schedule
+        .window_end_today()
+        .ok_or("Invalid schedule end_time")?;
     if now < start {
         return Ok(Some(start));
     }
@@ -490,7 +516,11 @@ fn terminal_status_for_state(
         "window_count" => {
             if state.success_count >= schedule.runs_per_profile.unwrap_or(0) {
                 Some("done")
-            } else if schedule.window_end_today().map(|end| now > end).unwrap_or(false) {
+            } else if schedule
+                .window_end_today()
+                .map(|end| now > end)
+                .unwrap_or(false)
+            {
                 Some("expired")
             } else {
                 None
