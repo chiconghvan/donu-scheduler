@@ -16,7 +16,7 @@ import {
 } from "../../api";
 import type { Script, ScriptInput, ScriptStoreCatalog, ScriptStoreScript } from "../../types";
 import { parseDefaultInputsJson, type DefaultInput } from "../../utils/cliArgs";
-import { formatDateTime } from "../../utils/format";
+import { formatDateTime, formatNumericDateTime } from "../../utils/format";
 import { parseInputNodes } from "../../utils/scriptParser";
 import { useInterval } from "../../hooks/useInterval";
 import { useDialog } from "../common/Dialog";
@@ -123,6 +123,7 @@ export default function ScriptStorePage() {
   const selectedManaged = managedScripts.find((script) => script.id === managedSelectedId) || filteredManaged[0] || null;
   const selectedStore = filteredStore.find((script) => script.id === storeSelectedId) || filteredStore[0] || null;
   const scriptsWithInputs = managedScripts.filter((script) => parseDefaultInputsJson(script.default_inputs_json).length > 0).length;
+  const availableUpdates = (catalog?.scripts || []).filter((script) => script.update_available || script.pending_update).length;
 
   async function saveToken() {
     try {
@@ -257,29 +258,31 @@ export default function ScriptStorePage() {
 
     <div className="scripts-manager-tab-panel">
       {activeTab === "store" && storeNotice && <StoreFetchNotice state={storeNotice} onClose={closeStoreNotice} />}
-      {activeTab === "managed" ? <ManagedScriptsTab scripts={filteredManaged} selected={selectedManaged} selectedId={managedSelectedId} query={managedQuery} total={managedScripts.length} withInputs={scriptsWithInputs} onQuery={setManagedQuery} onSelect={setManagedSelectedId} onAdd={openCreateDialog} onEdit={openEditDialog} onDelete={(script) => void removeScript(script)} /> : <StoreTab tokenReady={tokenReady} token={token} setToken={setToken} saveToken={() => void saveToken()} catalog={catalog} scripts={filteredStore} selected={selectedStore} selectedId={storeSelectedId} query={storeQuery} filter={storeFilter} busyId={busyId} onQuery={setStoreQuery} onFilter={setStoreFilter} onSelect={setStoreSelectedId} onRefresh={() => void loadStore(true)} onAction={(script) => void runStoreAction(script)} />}
+      {activeTab === "managed" ? <ManagedScriptsTab scripts={filteredManaged} selected={selectedManaged} selectedId={managedSelectedId} query={managedQuery} total={managedScripts.length} withInputs={scriptsWithInputs} updates={availableUpdates} onQuery={setManagedQuery} onSelect={setManagedSelectedId} onAdd={openCreateDialog} onEdit={openEditDialog} onDelete={(script) => void removeScript(script)} /> : <StoreTab tokenReady={tokenReady} token={token} setToken={setToken} saveToken={() => void saveToken()} catalog={catalog} scripts={filteredStore} selected={selectedStore} selectedId={storeSelectedId} query={storeQuery} filter={storeFilter} busyId={busyId} onQuery={setStoreQuery} onFilter={setStoreFilter} onSelect={setStoreSelectedId} onRefresh={() => void loadStore(true)} onAction={(script) => void runStoreAction(script)} />}
     </div>
 
     {dialogOpen && <ScriptEditorDialog mode={dialogMode} form={scriptForm} setForm={setScriptForm} inputs={scriptInputs} setInputs={setScriptInputs} errors={scriptErrors} saving={savingScript} onChooseFile={() => void chooseScriptFile()} onCancel={() => { if (!savingScript) setDialogOpen(false); }} onSave={() => void saveScript()} />}
   </div>;
 }
 
-function ManagedScriptsTab(props: { scripts: Script[]; selected: Script | null; selectedId: string | null; query: string; total: number; withInputs: number; onQuery: (query: string) => void; onSelect: (id: string) => void; onAdd: () => void; onEdit: (script: Script) => void; onDelete: (script: Script) => void; }) {
-  const { scripts, selected, selectedId, query, total, withInputs, onQuery, onSelect, onAdd, onEdit, onDelete } = props;
+function ManagedScriptsTab(props: { scripts: Script[]; selected: Script | null; selectedId: string | null; query: string; total: number; withInputs: number; updates: number; onQuery: (query: string) => void; onSelect: (id: string) => void; onAdd: () => void; onEdit: (script: Script) => void; onDelete: (script: Script) => void; }) {
+  const { scripts, selected, selectedId, query, total, withInputs, updates, onQuery, onSelect, onAdd, onEdit, onDelete } = props;
   return <>
-    <div className="scripts-manager-stats">
-      <StatCard label="Managed" value={total} />
-      <StatCard label="With inputs" value={withInputs} />
-      <StatCard label="No inputs" value={Math.max(total - withInputs, 0)} />
-    </div>
+    <ScriptStatsSummary total={total} withInputs={withInputs} updates={updates} />
     <div className="split-layout split-layout--40-60 scripts-manager-split">
       <section className="panel">
         <div className="panel__header"><div className="search-input scripts-manager-search"><Search className="search-input__icon" size={14} /><input className="input" placeholder="Search managed scripts" value={query} onChange={(event) => onQuery(event.target.value)} /></div></div>
-        <div className="panel__body scripts-manager-list">{scripts.length === 0 ? <EmptyState title="No managed scripts" description="Add a .gscript file to use it in jobs and manual runs." action={<button className="btn btn--primary" onClick={onAdd}><Plus size={14} /> Add Script</button>} /> : scripts.map((script) => <ManagedScriptCard key={script.id} script={script} selected={selectedId === script.id} onClick={() => onSelect(script.id)} />)}</div>
+        <div className="panel__body scripts-manager-list script-row-list">{scripts.length === 0 ? <EmptyState title="No managed scripts" description="Add a .gscript file to use it in jobs and manual runs." action={<button className="btn btn--primary" onClick={onAdd}><Plus size={14} /> Add Script</button>} /> : scripts.map((script) => <ManagedScriptCard key={script.id} script={script} selected={selectedId === script.id} onClick={() => onSelect(script.id)} />)}</div>
       </section>
       <section className="panel">
-        <div className="panel__header">Inspector</div>
-        <div className="panel__body">{selected ? <ManagedScriptInspector script={selected} onEdit={() => onEdit(selected)} onDelete={() => onDelete(selected)} /> : <EmptyState title="Select script" description="Choose script from list or add a new one." />}</div>
+        <div className="panel__header">
+          {selected ? <div className="script-inspector-header">
+            <div className="script-inspector-header__title"><span className="script-inspector-header__name">{selected.name}</span></div>
+            <div className="script-inspector-header__description">{selected.description || "No description"}</div>
+          </div> : <span>Inspector</span>}
+          {selected && <div className="page__actions"><button className="btn btn--secondary" onClick={() => onEdit(selected)}><Pencil size={14} /> Edit</button><button className="btn btn--danger" onClick={() => onDelete(selected)}><Trash2 size={14} /> Delete</button></div>}
+        </div>
+        <div className="panel__body">{selected ? <ManagedScriptInspector script={selected} /> : <EmptyState title="Select script" description="Choose script from list or add a new one." />}</div>
       </section>
     </div>
   </>;
@@ -287,19 +290,16 @@ function ManagedScriptsTab(props: { scripts: Script[]; selected: Script | null; 
 
 function ManagedScriptCard({ script, selected, onClick }: { script: Script; selected: boolean; onClick: () => void }) {
   const inputs = parseDefaultInputsJson(script.default_inputs_json);
-  return <button className={`script-list-card ${selected ? "script-list-card--selected" : ""}`} onClick={onClick} type="button">
+  return <button className={`script-list-row ${selected ? "script-list-row--selected" : ""}`} onClick={onClick} type="button">
     <div className="script-list-card__top"><strong>{script.name}</strong><InputCountBadge count={inputs.length} /></div>
     <div className="script-list-card__description">{script.description || "No description"}</div>
     <div className="script-list-card__meta">Updated {formatDateTime(script.updated_at)}</div>
   </button>;
 }
 
-function ManagedScriptInspector({ script, onEdit, onDelete }: { script: Script; onEdit: () => void; onDelete: () => void }) {
+function ManagedScriptInspector({ script }: { script: Script }) {
   const inputs = parseDefaultInputsJson(script.default_inputs_json);
   return <div className="script-inspector">
-    <div className="page__actions"><button className="btn btn--secondary" onClick={onEdit}><Pencil size={14} /> Edit</button><button className="btn btn--danger" onClick={onDelete}><Trash2 size={14} /> Delete</button></div>
-    <div className="script-inspector__title"><h2>{script.name}</h2><InputCountBadge count={inputs.length} /></div>
-    <p className="script-inspector__description">{script.description || "No description"}</p>
     <div className="script-detail-grid">
       <div><span>Path</span><strong className="script-path">{script.script_path}</strong></div>
       <div><span>Default args</span><strong>{script.default_args || "None"}</strong></div>
@@ -327,30 +327,34 @@ function StoreTab(props: { tokenReady: boolean | null; token: string; setToken: 
   return <>
     <div className="page__actions scripts-store-toolbar"><div className="search-input scripts-manager-search"><Search className="search-input__icon" size={14} /><input className="input" placeholder="Search store scripts" value={query} onChange={(event) => onQuery(event.target.value)} /></div><select className="select" value={filter} onChange={(event) => onFilter(event.target.value)}><option value="all">All</option><option value="installed">Installed</option><option value="available">Available</option><option value="updates">Updates</option></select><button className="btn btn--secondary" onClick={onRefresh}><RefreshCw size={14} /> Refresh</button></div>
     <div className="split-layout split-layout--40-60 scripts-manager-split">
-      <section className="panel"><div className="panel__header">Catalog {catalog?.store_version}</div><div className="panel__body scripts-manager-list">{scripts.length === 0 ? <EmptyState title="No scripts" /> : scripts.map((script) => <StoreScriptCard key={script.id} script={script} selected={selectedId === script.id} busy={busyId === script.id} onSelect={() => onSelect(script.id)} onAction={() => onAction(script)} />)}</div></section>
-      <section className="panel"><div className="panel__header">Store Inspector</div><div className="panel__body">{selected ? <StoreInspector script={selected} busy={busyId === selected.id} onAction={() => onAction(selected)} /> : <EmptyState title="Select script" />}</div></section>
+      <section className="panel"><div className="panel__header">Catalog {catalog?.store_version}</div><div className="panel__body scripts-manager-list store-script-list">{scripts.length === 0 ? <EmptyState title="No scripts" /> : scripts.map((script) => <StoreScriptCard key={script.id} script={script} selected={selectedId === script.id} busy={busyId === script.id} onSelect={() => onSelect(script.id)} onAction={() => onAction(script)} />)}</div></section>
+      <section className="panel">
+        <div className="panel__header">
+          {selected ? <div className="script-inspector-header script-inspector-header--store">
+            <div className="script-inspector-header__title"><span className="script-inspector-header__name">{selected.name}</span><StoreStatusAction script={selected} busy={busyId === selected.id} onAction={() => onAction(selected)} /></div>
+            <div className="script-inspector-header__description">{selected.description}</div>
+          </div> : <span>Store Inspector</span>}
+        </div>
+        <div className="panel__body">{selected ? <StoreInspector script={selected} /> : <EmptyState title="Select script" />}</div>
+      </section>
     </div>
   </>;
 }
 
 function StoreScriptCard({ script, selected, busy, onSelect, onAction }: { script: ScriptStoreScript; selected: boolean; busy: boolean; onSelect: () => void; onAction: () => void }) {
-  return <button className={`script-list-card ${selected ? "script-list-card--selected" : ""}`} onClick={onSelect} type="button">
-    <div className="script-list-card__top"><strong>{script.name}</strong><StoreBadge script={script} /></div>
+  return <div className={`store-script-list-item ${selected ? "store-script-list-item--selected" : ""}`} onClick={onSelect} role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect(); }}>
+    <div className="script-list-card__top"><strong>{script.name}</strong><StoreStatusAction script={script} busy={busy} onAction={onAction} /></div>
     <div className="script-list-card__description">{script.description}</div>
     <div className="script-list-card__meta">Version {script.version} · {script.runtime}</div>
-    <div className="script-list-card__actions"><button className="btn btn--sm btn--primary" disabled={busy || (script.installed && !script.update_available)} onClick={(event) => { event.stopPropagation(); onAction(); }}><Download size={12} />{script.installed ? "Update" : "Install"}</button></div>
-  </button>;
+  </div>;
 }
 
-function StoreInspector({ script, busy, onAction }: { script: ScriptStoreScript; busy: boolean; onAction: () => void }) {
+function StoreInspector({ script }: { script: ScriptStoreScript }) {
   return <div className="script-inspector">
-    <div className="page__actions"><button className="btn btn--primary" disabled={busy || (script.installed && !script.update_available)} onClick={onAction}><Download size={14} /> {script.installed ? "Update" : "Install"}</button></div>
-    <div className="script-inspector__title"><h2>{script.name}</h2><StoreBadge script={script} /></div>
-    <p className="script-inspector__description">{script.description}</p>
     <div className="script-detail-grid">
       <div><span>Version</span><strong>{script.version}</strong></div>
       <div><span>Runtime</span><strong>{script.runtime}</strong></div>
-      <div><span>Updated</span><strong>{script.updated_at || "Unknown"}</strong></div>
+      <div><span>Updated</span><strong>{formatNumericDateTime(script.updated_at)}</strong></div>
       <div><span>Installed</span><strong>{script.installed_version || "No"}</strong></div>
       <div><span>Asset</span><strong>{script.asset_name || "Default"}</strong></div>
       <div><span>Source</span><strong>{script.source_tag || "Latest"}</strong></div>
@@ -374,8 +378,16 @@ function ScriptEditorDialog(props: { mode: ScriptDialogMode; form: ScriptInput; 
   </div></div>;
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
-  return <div className="card scripts-stat-card"><strong>{value}</strong><span>{label}</span></div>;
+function ScriptStatsSummary({ total, withInputs, updates }: { total: number; withInputs: number; updates: number }) {
+  return <div className="scripts-manager-stats" aria-label="Script statistics">
+    <span>Managed <strong>{total}</strong></span>
+    <span className="scripts-manager-stats__separator" aria-hidden="true">·</span>
+    <span>With inputs <strong>{withInputs}</strong></span>
+    <span className="scripts-manager-stats__separator" aria-hidden="true">·</span>
+    <span>No inputs <strong>{Math.max(total - withInputs, 0)}</strong></span>
+    <span className="scripts-manager-stats__separator" aria-hidden="true">·</span>
+    <span>Updates <strong>{updates}</strong></span>
+  </div>;
 }
 
 function InputCountBadge({ count }: { count: number }) {
@@ -387,4 +399,12 @@ function StoreBadge({ script }: { script: ScriptStoreScript }) {
   if (script.update_available) return <span className="badge badge--queued">Update</span>;
   if (script.installed) return <span className="badge badge--success">Installed</span>;
   return <span className="badge badge--scheduled">Available</span>;
+}
+
+function StoreStatusAction({ script, busy, onAction }: { script: ScriptStoreScript; busy: boolean; onAction: () => void }) {
+  if (script.pending_update) return <StoreBadge script={script} />;
+  if (script.update_available || !script.installed) {
+    return <button className="btn btn--sm btn--primary" disabled={busy} onClick={(event) => { event.stopPropagation(); onAction(); }}><Download size={12} />{script.installed ? "Update" : "Install"}</button>;
+  }
+  return <StoreBadge script={script} />;
 }

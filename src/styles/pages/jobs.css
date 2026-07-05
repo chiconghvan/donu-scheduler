@@ -1,0 +1,129 @@
+.form-error {
+  border: 1px solid var(--accent-red-border-strong);
+  background: var(--accent-red-bg-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  color: var(--fg-primary);
+}
+
+.form-error strong {
+  color: var(--accent-red);
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+.job-form-section {
+  background: color-mix(in srgb, var(--bg-raised) 82%, var(--bg-surface) 18%);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.job-form-section__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.job-form-section__title {
+  font-weight: 650;
+  color: var(--fg-primary);
+}
+
+.job-form-section__hint {
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
+.job-profile-picker-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.job-profile-count {
+  color: var(--fg-secondary);
+  font-size: var(--text-sm);
+}
+
+.job-profile-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-height: 92px;
+  overflow-y: auto;
+}
+
+.job-profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  color: var(--fg-secondary);
+  font-size: var(--text-xs);
+}
+
+.job-profile-chip--muted {
+  color: var(--fg-muted);
+}
+
+.schedule-mode-fields {
+  margin-top: var(--space-3);
+}
+
+.schedule-mode-fields .section-title {
+  margin: var(--space-1) 0 0;
+}
+
+.schedule-days-field {
+  margin-top: var(--space-3);
+}
+
+.day-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.day-preset {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--fg-secondary);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--transition-normal), border-color var(--transition-normal), color var(--transition-normal);
+}
+
+.day-preset:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-hover);
+}
+
+.day-preset--active {
+  background: var(--accent-blue-bg-strong);
+  border-color: var(--accent-blue-border);
+  color: var(--accent-blue);
+}
+
+.day-picker--compact {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(36px, 1fr));
+  gap: var(--space-2);
+}
+
+.day-picker--compact .day-picker__btn {
+  width: 100%;
+}

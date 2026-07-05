@@ -1,0 +1,21 @@
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-overlay);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-muted);
+}
+
+/* ---------- Selection ---------- */
+::selection {
+  background: var(--selection-bg);
+  color: var(--fg-primary);
+}

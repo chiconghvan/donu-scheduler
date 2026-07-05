@@ -1,0 +1,37 @@
+.activity-content {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  overflow: hidden;
+}
+
+.activity-content--idle {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.activity-active-panel,
+.activity-history-panel {
+  min-height: 0;
+  min-width: 0;
+}
+
+.activity-active-panel .panel__body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.activity-history-panel .panel__body {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.activity-content--idle .activity-active-panel .panel__body {
+  flex: 0 0 auto;
+}
+
+.activity-content--idle .activity-active-panel .empty-state {
+  min-height: 0;
+  padding: var(--space-4);
+}

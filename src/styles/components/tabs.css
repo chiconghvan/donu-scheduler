@@ -1,0 +1,25 @@
+/* ---------- Tabs ---------- */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-default);
+}
+.tab {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition-normal);
+  font-family: inherit;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--fg-secondary);
+}
+.tab--active {
+  color: var(--fg-primary);
+  border-bottom-color: var(--accent-blue);
+}

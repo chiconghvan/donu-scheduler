@@ -1,0 +1,100 @@
+/* ============================================================
+   Page Layouts
+   ============================================================ */
+
+.page {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.dashboard-page,
+.jobs-page,
+.test-lab-page,
+.activity-page,
+.settings-page,
+.scripts-manager-page {
+  height: calc(100vh - 36px - (var(--space-4) * 2));
+  max-height: calc(100vh - 36px - (var(--space-4) * 2));
+  min-height: 0;
+  overflow: hidden;
+}
+
+.jobs-page,
+.test-lab-page,
+.activity-page,
+.settings-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.jobs-page > .split-layout,
+.test-lab-page > .split-layout {
+  flex: 1;
+  grid-auto-rows: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.jobs-page > .split-layout > .panel,
+.test-lab-page > .split-layout > .panel {
+  min-height: 0;
+}
+
+.settings-page__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.page__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+}
+
+.page__title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+}
+
+.page__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Metric grid */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* Split layout */
+.split-layout {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.split-layout--40-60 {
+  grid-template-columns: 2fr 3fr;
+}
+
+.split-layout--equal {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Two column grid */
+.two-col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}

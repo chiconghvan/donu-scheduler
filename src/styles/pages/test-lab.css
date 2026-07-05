@@ -1,0 +1,66 @@
+/* Profile list item */
+.profile-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+.profile-item:hover {
+  background: var(--bg-surface);
+}
+.profile-item--selected {
+  background: var(--accent-blue-bg);
+}
+.profile-item__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-item__group {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+/* Task card */
+.task-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+.task-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.task-card__header:hover {
+  background: var(--bg-surface);
+}
+.task-card__title { flex: 1; font-weight: 500; }
+.task-card__meta {
+  font-size: var(--text-xs);
+  color: var(--fg-secondary);
+}
+.task-card__children {
+  border-top: 1px solid var(--border-default);
+}
+.task-card__child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-8);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--border-default);
+}
+.task-card__child:last-child {
+  border-bottom: none;
+}
