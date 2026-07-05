@@ -290,7 +290,6 @@ function ManagedScriptCard({ script, selected, onClick }: { script: Script; sele
   return <button className={`script-list-card ${selected ? "script-list-card--selected" : ""}`} onClick={onClick} type="button">
     <div className="script-list-card__top"><strong>{script.name}</strong><InputCountBadge count={inputs.length} /></div>
     <div className="script-list-card__description">{script.description || "No description"}</div>
-    <div className="script-path" title={script.script_path}>{script.script_path}</div>
     <div className="script-list-card__meta">Updated {formatDateTime(script.updated_at)}</div>
   </button>;
 }

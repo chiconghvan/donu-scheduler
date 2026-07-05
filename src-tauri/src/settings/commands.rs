@@ -16,5 +16,7 @@ pub fn update_settings(
     settings: Settings,
 ) -> Result<(), String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
-    crate::settings::repository::update_settings(&db_path, &settings)
+    crate::settings::repository::update_settings(&db_path, &settings)?;
+    crate::run_logs::cleanup_old_logs(&db_path)?;
+    Ok(())
 }

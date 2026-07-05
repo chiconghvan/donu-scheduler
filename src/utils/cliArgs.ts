@@ -6,16 +6,30 @@ export interface DefaultInput {
   comboboxData: string;
 }
 
+export type NormalizedInputType = "text" | "combobox" | "file";
+
+export function normalizeInputType(inputType: string): NormalizedInputType {
+  const normalized = inputType.trim().toLowerCase().replace(/[\s_-]/g, "");
+  if (normalized === "combobox") return "combobox";
+  if (normalized === "file" || normalized === "filebrowser" || normalized === "filechooser") return "file";
+  return "text";
+}
+
 export function buildCliArgs(
   defaultInputs: DefaultInput[],
   cliArgs: string
 ): string {
   const inputArgs = defaultInputs
     .filter((d) => d.value.trim() !== "")
-    .map((d) => `--input ${d.name}=${d.value}`)
+    .map((d) => `--input ${quoteCliArg(`${d.name}=${d.value}`)}`)
     .join(" ");
   const extraArgs = cliArgs.trim();
   return [inputArgs, extraArgs].filter(Boolean).join(" ");
+}
+
+function quoteCliArg(value: string): string {
+  if (!/[\s"]/.test(value)) return value;
+  return `"${value.replace(/"/g, '\\"')}"`;
 }
 
 export function parseDefaultInputsJson(json: string): DefaultInput[] {
@@ -25,4 +39,12 @@ export function parseDefaultInputsJson(json: string): DefaultInput[] {
   } catch {
     return [];
   }
+}
+
+export function parseCachedInputsOrDefault(
+  cacheJson: string,
+  defaultJson: string
+): DefaultInput[] {
+  const cached = parseDefaultInputsJson(cacheJson);
+  return cached.length > 0 ? cached : parseDefaultInputsJson(defaultJson);
 }

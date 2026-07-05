@@ -41,6 +41,41 @@ pub struct SpawnedProcess {
     pub log_path: Option<String>,
 }
 
+fn split_cli_args(input: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut escaped = false;
+
+    for ch in input.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        match ch {
+            '\\' if in_quotes => escaped = true,
+            '"' => in_quotes = !in_quotes,
+            ch if ch.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    args.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if escaped {
+        current.push('\\');
+    }
+    if !current.is_empty() {
+        args.push(current);
+    }
+
+    args
+}
+
 pub async fn spawn_runtime_queued(request: &RunnerRequest) -> Result<SpawnedProcess, RunnerOutcome> {
     let gate = LAST_RUNTIME_SPAWN_AT.get_or_init(|| tokio::sync::Mutex::new(None));
     let mut last_spawn_at = gate.lock().await;
@@ -90,8 +125,8 @@ pub fn spawn_runtime(request: &RunnerRequest) -> Result<SpawnedProcess, RunnerOu
     args.push("--profile".to_string());
     args.push(request.profile_id.clone());
 
-    for arg in request.cli_args.split_whitespace() {
-        args.push(arg.to_string());
+    for arg in split_cli_args(&request.cli_args) {
+        args.push(arg);
     }
 
     let log_prefix = format!(
@@ -100,12 +135,20 @@ pub fn spawn_runtime(request: &RunnerRequest) -> Result<SpawnedProcess, RunnerOu
         args.join(" ")
     );
 
-    let child = match Command::new(&request.runtime_path)
+    let mut command = Command::new(&request.runtime_path);
+    command
         .args(&args)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
+        .stderr(std::process::Stdio::piped());
+
+    #[cfg(target_os = "windows")]
     {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let child = match command.spawn() {
         Ok(c) => c,
         Err(e) => {
             if let Some(log_path) = request.log_path.as_deref() {

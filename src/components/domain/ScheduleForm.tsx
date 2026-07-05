@@ -1,4 +1,4 @@
-import type { ScheduleUiState, ScheduleMode } from "../../utils/schedule";
+import type { IntervalUnit, ScheduleUiState, ScheduleMode } from "../../utils/schedule";
 import { dayLabels } from "../../utils/schedule";
 
 const modeLabels: { key: ScheduleMode; label: string }[] = [
@@ -127,11 +127,12 @@ export default function ScheduleForm({ value, onChange }: ScheduleFormProps) {
               className="select"
               value={value.intervalUnit}
               onChange={(e) =>
-                set("intervalUnit", e.target.value as "minutes" | "hours")
+                set("intervalUnit", e.target.value as IntervalUnit)
               }
             >
               <option value="minutes">Minutes</option>
               <option value="hours">Hours</option>
+              <option value="days">Days</option>
             </select>
           </div>
         </div>

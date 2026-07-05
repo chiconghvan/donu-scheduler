@@ -3,7 +3,7 @@ import { Eye, Play, PlaySquare, RefreshCw, Square, Users } from "lucide-react";
 import { getInputCache, listScripts, listTestRuns, runBatchTest, runScriptTest, saveInputCache, stopBatchTestRun, stopTestRun } from "../../api";
 import type { ProfileSnapshot, Script, SelectedJobProfile, TestRun } from "../../types";
 import { useInterval } from "../../hooks/useInterval";
-import { buildCliArgs, parseDefaultInputsJson, type DefaultInput } from "../../utils/cliArgs";
+import { buildCliArgs, parseCachedInputsOrDefault, parseDefaultInputsJson, type DefaultInput } from "../../utils/cliArgs";
 import { formatDuration, formatTime } from "../../utils/format";
 import EmptyState from "../common/EmptyState";
 import { useToast } from "../common/Toast";
@@ -33,7 +33,7 @@ export default function TestLabPage() {
     const script = scripts.find((s) => s.id === scriptId);
     if (!script) return;
     setInputs(parseDefaultInputsJson(script.default_inputs_json));
-    void getInputCache(scriptId).then((cache) => { setCliArgs(cache.cli_args); setInputs(parseDefaultInputsJson(cache.default_inputs_json || script.default_inputs_json)); }).catch(() => undefined);
+    void getInputCache(scriptId).then((cache) => { setCliArgs(cache.cli_args); setInputs(parseCachedInputsOrDefault(cache.default_inputs_json, script.default_inputs_json)); }).catch(() => undefined);
   }, [scriptId, scripts]);
 
   async function run(batch: boolean) {

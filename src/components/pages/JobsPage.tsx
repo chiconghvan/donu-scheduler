@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarClock, Pencil, Plus, RefreshCw, Search, Square, Trash2, Users, X } from "lucide-react";
 import { createJob, deleteJob, getInputCache, getTodayJobStates, listJobRuns, listJobs, listScripts, saveInputCache, setJobEnabled, stopJobRun, updateJob } from "../../api";
 import type { JobDefinition, JobInput, JobProfileState, JobRun, Script, SelectedJobProfile } from "../../types";
-import { parseDefaultInputsJson, type DefaultInput } from "../../utils/cliArgs";
+import { parseCachedInputsOrDefault, parseDefaultInputsJson, type DefaultInput } from "../../utils/cliArgs";
 import { formatDuration, formatTime } from "../../utils/format";
 import { defaultScheduleUi, getScheduleLabel, getSchedulePreview, jsonToSchedule, parseProfilesCount, parseSelectedProfiles, randomToJson, scheduleToJson, type ScheduleUiState } from "../../utils/schedule";
 import EmptyState from "../common/EmptyState";
@@ -56,9 +56,9 @@ export default function JobsPage() {
   function startEdit(job: JobDefinition) {
     setMode("edit"); setValidationErrors([]); setSelectedId(job.id); setForm({ name: job.name, description: job.description, script_id: job.script_id, cli_args: job.cli_args, timeout_seconds: job.timeout_seconds }); setSchedule(jsonToSchedule(job.schedule_json, job.random_json)); setProfiles(parseSelectedProfiles(job.profile_ids_json));
     const script = scripts.find((s) => s.id === job.script_id); setInputs(parseDefaultInputsJson(script?.default_inputs_json || "[]"));
-    void getInputCache(job.script_id).then((c) => { setInputs(parseDefaultInputsJson(c.default_inputs_json || script?.default_inputs_json || "[]")); }).catch(() => undefined);
+    void getInputCache(job.script_id).then((c) => { setInputs(parseCachedInputsOrDefault(c.default_inputs_json, script?.default_inputs_json || "[]")); }).catch(() => undefined);
   }
-  async function onScriptChange(id: string) { setForm({ ...form, script_id: id }); const script = scripts.find((s) => s.id === id); setInputs(parseDefaultInputsJson(script?.default_inputs_json || "[]")); try { const cache = await getInputCache(id); setInputs(parseDefaultInputsJson(cache.default_inputs_json || script?.default_inputs_json || "[]")); setForm((f) => ({ ...f, cli_args: cache.cli_args })); } catch { /* ignore */ } }
+  async function onScriptChange(id: string) { setForm({ ...form, script_id: id }); const script = scripts.find((s) => s.id === id); setInputs(parseDefaultInputsJson(script?.default_inputs_json || "[]")); try { const cache = await getInputCache(id); setInputs(parseCachedInputsOrDefault(cache.default_inputs_json, script?.default_inputs_json || "[]")); setForm((f) => ({ ...f, cli_args: cache.cli_args })); } catch { /* ignore */ } }
 
   function validate() {
     const errors: string[] = [];

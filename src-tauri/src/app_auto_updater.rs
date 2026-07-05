@@ -315,9 +315,16 @@ fn save_pending_installer_path(
 fn load_pending_installer_path(state: &tauri::State<'_, Arc<AppState>>) -> Result<Option<String>, String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
-    Ok(crate::db::get_setting(&conn, PENDING_INSTALLER_PATH_KEY)
+    let pending_path = crate::db::get_setting(&conn, PENDING_INSTALLER_PATH_KEY)
         .ok()
-        .filter(|path| !path.trim().is_empty()))
+        .filter(|path| !path.trim().is_empty());
+    if let Some(path) = pending_path.as_deref() {
+        if !Path::new(path).exists() {
+            crate::db::set_setting(&conn, PENDING_INSTALLER_PATH_KEY, "").map_err(|e| e.to_string())?;
+            return Ok(None);
+        }
+    }
+    Ok(pending_path)
 }
 
 fn spawn_silent_update_script(installer_path: PathBuf) -> Result<(), String> {
@@ -376,6 +383,9 @@ if /i \"%INSTALLER_KIND%\"==\"exe\" (\r\n\
   set \"INSTALL_EXIT=!ERRORLEVEL!\"\r\n\
 )\r\n\
 echo [%date% %time%] Installer exit code: !INSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
+if \"!INSTALL_EXIT!\"==\"0\" (\r\n\
+  del /f /q \"%INSTALLER%\" >> \"%LOG_PATH%\" 2>&1\r\n\
+)\r\n\
 start \"\" \"%APP_EXE%\"\r\n\
 exit /b !INSTALL_EXIT!\r\n\
 endlocal\r\n",

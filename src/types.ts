@@ -204,6 +204,7 @@ export interface Settings {
   gpmglobal_api_base_url: string;
   donutbrowser_api_base_url: string;
   global_max_parallel_runtime: number;
+  log_retention_days: number;
   disable_auto_updates: boolean;
   disable_runtime_updates: boolean;
 }

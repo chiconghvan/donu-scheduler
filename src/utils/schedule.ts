@@ -1,6 +1,7 @@
 import type { SelectedJobProfile, JobDefinition } from "../types";
 
 export type ScheduleMode = "window_count" | "fixed_interval" | "daily_times";
+export type IntervalUnit = "minutes" | "hours" | "days";
 
 export interface ScheduleUiState {
   mode: ScheduleMode;
@@ -8,7 +9,7 @@ export interface ScheduleUiState {
   endTime: string;
   runsPerProfile: number;
   intervalValue: number;
-  intervalUnit: "minutes" | "hours";
+  intervalUnit: IntervalUnit;
   timesText: string;
   activeDays: number[];
   minGap: number;
@@ -49,10 +50,7 @@ export function scheduleToJson(schedule: ScheduleUiState): string {
     return JSON.stringify(
       {
         type: "fixed_interval",
-        interval_minutes:
-          schedule.intervalUnit === "hours"
-            ? schedule.intervalValue * 60
-            : schedule.intervalValue,
+        interval_minutes: intervalToMinutes(schedule.intervalValue, schedule.intervalUnit),
         active_days: schedule.activeDays,
         count_mode: "attempt",
       },
@@ -104,11 +102,12 @@ export function jsonToSchedule(
     const rand = parseRandomJson(randomJson || "");
     if (parsed.type === "fixed_interval") {
       const minutes = Number(parsed.interval_minutes || 60);
+      const interval = minutesToInterval(minutes);
       return {
         ...defaultScheduleUi,
         mode: "fixed_interval",
-        intervalValue: minutes % 60 === 0 ? minutes / 60 : minutes,
-        intervalUnit: minutes % 60 === 0 ? "hours" : "minutes",
+        intervalValue: interval.value,
+        intervalUnit: interval.unit,
         activeDays: parsed.active_days || defaultScheduleUi.activeDays,
       };
     }
@@ -160,7 +159,7 @@ export function getSchedulePreview(schedule: ScheduleUiState): string {
     return `${schedule.runsPerProfile} runs/profile from ${schedule.startTime} to ${schedule.endTime}, ${days}. Random delay ${schedule.minGap}-${schedule.maxGap}min.`;
   }
   if (schedule.mode === "fixed_interval") {
-    return `Run every ${schedule.intervalValue} ${schedule.intervalUnit === "hours" ? "hour(s)" : "min"}, ${days}.`;
+    return `Run every ${schedule.intervalValue} ${intervalUnitLabel(schedule.intervalUnit)}, ${days}.`;
   }
   const times = schedule.timesText
     .split(/[,\n]/)
@@ -176,7 +175,7 @@ export function getScheduleLabel(job: JobDefinition): string {
       return `${schedule.start_time || "--:--"}-${schedule.end_time || "--:--"}`;
     }
     if (schedule.type === "fixed_interval") {
-      return `Every ${schedule.interval_minutes || "?"}m`;
+      return `Every ${formatIntervalMinutes(Number(schedule.interval_minutes || 0))}`;
     }
     if (schedule.type === "daily_times") {
       return Array.isArray(schedule.times)
@@ -187,6 +186,30 @@ export function getScheduleLabel(job: JobDefinition): string {
     return "Invalid";
   }
   return "Schedule";
+}
+
+function intervalToMinutes(value: number, unit: IntervalUnit): number {
+  if (unit === "days") return value * 24 * 60;
+  if (unit === "hours") return value * 60;
+  return value;
+}
+
+function minutesToInterval(minutes: number): { value: number; unit: IntervalUnit } {
+  if (minutes % 1440 === 0) return { value: minutes / 1440, unit: "days" };
+  if (minutes % 60 === 0) return { value: minutes / 60, unit: "hours" };
+  return { value: minutes, unit: "minutes" };
+}
+
+function intervalUnitLabel(unit: IntervalUnit): string {
+  if (unit === "days") return "day(s)";
+  if (unit === "hours") return "hour(s)";
+  return "min";
+}
+
+function formatIntervalMinutes(minutes: number): string {
+  if (!minutes) return "?";
+  const interval = minutesToInterval(minutes);
+  return `${interval.value}${interval.unit === "days" ? "d" : interval.unit === "hours" ? "h" : "m"}`;
 }
 
 export function getUpcomingTime(job: JobDefinition): string {

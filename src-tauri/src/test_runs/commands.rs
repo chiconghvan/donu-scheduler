@@ -43,7 +43,7 @@ pub async fn run_script_test(
 
     let now = now_iso();
     let run_id = new_id();
-    let log_path = crate::run_logs::prepare_log_path(&script.script_path, &profile_id, &run_id, &now)?;
+    let log_path = crate::run_logs::prepare_log_path(&db_path_owned, &script.script_path, &profile_id, &run_id, &now)?;
 
     let test_run = TestRun {
         id: run_id.clone(),
@@ -205,7 +205,7 @@ pub async fn run_batch_test(
                 group_name: None,
             });
         let run_id = new_id();
-        let log_path = crate::run_logs::prepare_log_path(&script.script_path, profile_id, &run_id, &now)?;
+        let log_path = crate::run_logs::prepare_log_path(&db_path_owned, &script.script_path, profile_id, &run_id, &now)?;
 
         let test_run = TestRun {
             id: run_id.clone(),

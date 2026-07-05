@@ -253,7 +253,7 @@ export default function ProfilePickerDialog({
               })}
             </div>
 
-            <div className="search-input profile-filter-row__search" style={{ position: "relative" }}>
+            <div className="search-input profile-picker-dialog__selected-search">
               <Search size={14} className="search-input__icon" />
               <input
                 className="input"

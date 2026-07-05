@@ -188,7 +188,7 @@ async fn process_job(
         let run_id = crate::models::new_id();
         let now_str = crate::models::now_iso();
         let script_path = job.script_path_for_run(db_path).unwrap_or_default();
-        let log_path = crate::run_logs::prepare_log_path(&script_path, &profile.id, &run_id, &now_str)?;
+        let log_path = crate::run_logs::prepare_log_path(db_path, &script_path, &profile.id, &run_id, &now_str)?;
         let profile_name = profile.name.clone().unwrap_or_else(|| profile.id.clone());
         let group_name = profile.group_name.clone();
 

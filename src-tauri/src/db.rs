@@ -127,7 +127,10 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
             ('gpmlogin_api_base_url', 'http://127.0.0.1:19995'),
             ('gpmglobal_api_base_url', 'http://127.0.0.1:9495'),
             ('donutbrowser_api_base_url', 'http://127.0.0.1:10108'),
-            ('global_max_parallel_runtime', '3');
+            ('global_max_parallel_runtime', '3'),
+            ('log_retention_days', '30'),
+            ('disable_auto_updates', 'false'),
+            ('disable_runtime_updates', 'false');
         ",
     )?;
 

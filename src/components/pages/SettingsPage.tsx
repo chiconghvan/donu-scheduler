@@ -130,6 +130,16 @@ export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsP
       <Field label="Max Parallel Runtimes" type="number" value={String(settings.global_max_parallel_runtime)} onChange={(v) => setSettings({ ...settings, global_max_parallel_runtime: Number(v) || 1 })} />
     </div>
     <div className="card" style={{ marginTop: 16 }}>
+      <div className="panel__header settings-card__header"><span>Storage</span></div>
+      <div className="settings-option">
+        <div className="settings-option__copy">
+          <div className="settings-option__title">Log retention</div>
+          <div className="settings-option__hint">Delete old log files after this many days. Run history and statistics stay in database. Set 0 to disable cleanup.</div>
+        </div>
+        <label className="field settings-number-field"><span className="field__label">Days</span><input className="input" type="number" min={0} value={String(settings.log_retention_days)} onChange={(e) => setSettings({ ...settings, log_retention_days: Math.max(0, Number(e.target.value) || 0) })} /></label>
+      </div>
+    </div>
+    <div className="card" style={{ marginTop: 16 }}>
       <div className="panel__header settings-card__header"><span><Sun size={16} /> Appearance</span></div>
       <div className="settings-option">
         <div className="settings-option__copy">

@@ -37,7 +37,7 @@ pub fn run() {
         let conn = db::open_db(&db_path).expect("Failed to open database");
         db::init_db(&conn).expect("Failed to initialize database");
     }
-    let _ = run_logs::cleanup_old_logs();
+    let _ = run_logs::cleanup_old_logs(&db_path);
 
     let max_parallel = {
         let conn = db::open_db(&db_path).expect("Failed to open database for settings");

@@ -47,10 +47,12 @@ pub fn delete_script(
 
 #[tauri::command]
 pub fn open_file_dialog(filter_name: String, filter_extensions: Vec<String>) -> Result<Option<String>, String> {
-    let filter = rfd::FileDialog::new()
-        .add_filter(&filter_name, &filter_extensions);
+    let mut dialog = rfd::FileDialog::new();
+    if !filter_extensions.is_empty() {
+        dialog = dialog.add_filter(&filter_name, &filter_extensions);
+    }
     
-    match filter.pick_file() {
+    match dialog.pick_file() {
         Some(path) => Ok(Some(path.to_string_lossy().to_string())),
         None => Ok(None),
     }

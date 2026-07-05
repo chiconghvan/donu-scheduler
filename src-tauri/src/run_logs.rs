@@ -4,6 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 pub const MAX_LOG_LINES: usize = 2000;
 
@@ -38,12 +39,13 @@ impl Default for RunLogBuffer {
 }
 
 pub fn prepare_log_path(
+    db_path: &PathBuf,
     script_path: &str,
     profile_id: &str,
     run_id: &str,
     started_at: &str,
 ) -> Result<String, String> {
-    cleanup_old_logs().ok();
+    cleanup_old_logs(db_path).ok();
 
     let logs_dir = get_logs_dir();
     fs::create_dir_all(&logs_dir).map_err(|e| format!("Failed to create logs dir: {e}"))?;
@@ -64,7 +66,52 @@ pub fn prepare_log_path(
     Ok(logs_dir.join(file_name).to_string_lossy().to_string())
 }
 
-pub fn cleanup_old_logs() -> Result<(), String> {
+pub fn cleanup_old_logs(db_path: &PathBuf) -> Result<(), String> {
+    let conn = crate::db::open_db(db_path).map_err(|e| e.to_string())?;
+    let retention_days = crate::db::get_setting(&conn, "log_retention_days")
+        .unwrap_or_else(|_| "30".to_string())
+        .parse::<u64>()
+        .unwrap_or(30);
+    if retention_days == 0 {
+        return Ok(());
+    }
+
+    let logs_dir = get_logs_dir();
+    if !logs_dir.exists() {
+        return Ok(());
+    }
+
+    let cutoff = SystemTime::now()
+        .checked_sub(Duration::from_secs(retention_days.saturating_mul(24 * 60 * 60)))
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+
+    for entry in fs::read_dir(&logs_dir).map_err(|e| format!("Failed to read logs dir: {e}"))? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(SystemTime::now());
+        if modified >= cutoff {
+            continue;
+        }
+
+        let log_path = path.to_string_lossy().to_string();
+        fs::remove_file(&path).map_err(|e| format!("Failed to remove old log {}: {e}", path.display()))?;
+        clear_log_path_references(&conn, &log_path)?;
+    }
+
+    Ok(())
+}
+
+fn clear_log_path_references(conn: &rusqlite::Connection, log_path: &str) -> Result<(), String> {
+    conn.execute("UPDATE test_runs SET log_path=NULL WHERE log_path=?1", [log_path])
+        .map_err(|e| e.to_string())?;
+    conn.execute("UPDATE job_runs SET log_path=NULL WHERE log_path=?1", [log_path])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
