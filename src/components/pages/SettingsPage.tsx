@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
-import { Cpu, Download, RefreshCw, Save, Settings as SettingsIcon } from "lucide-react";
+import { Cpu, Download, Moon, Monitor, RefreshCw, Save, Settings as SettingsIcon, Sun } from "lucide-react";
 import { checkForAppUpdatesManual, downloadAndPrepareAppUpdate, getAppVersion, getRuntimeStatus, getSettings, restartApplication, updateRuntime, updateSettings } from "../../api";
+import type { ThemeMode } from "../../hooks/useTheme";
 import type { AppUpdateInfo, AppUpdatePrepareResult, RuntimeStatus, Settings } from "../../types";
 import { useToast } from "../common/Toast";
 
-export default function SettingsPage() {
+type SettingsPageProps = {
+  themeMode: ThemeMode;
+  onThemeModeChange: (mode: ThemeMode) => void;
+};
+
+export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsPageProps) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
   const [appVersion, setAppVersion] = useState("");
@@ -73,7 +79,6 @@ export default function SettingsPage() {
 
   async function runRuntimeUpdate(targetRuntime = runtime) {
     if (!targetRuntime?.update_available) return;
-    if (!window.confirm(`Download and install runtime update ${targetRuntime.latest_version}?`)) return;
     setUpdatingRuntime(true);
     try {
       await updateRuntime();
@@ -101,7 +106,6 @@ export default function SettingsPage() {
 
   async function downloadAppUpdate() {
     if (!appUpdate) return;
-    if (!window.confirm(`Download app update ${appUpdate.latest_version} in background?`)) return;
     setDownloadingApp(true);
     try {
       const prepared = await downloadAndPrepareAppUpdate(appUpdate);
@@ -125,7 +129,21 @@ export default function SettingsPage() {
       <Field label="Max Parallel Runtimes" type="number" value={String(settings.global_max_parallel_runtime)} onChange={(v) => setSettings({ ...settings, global_max_parallel_runtime: Number(v) || 1 })} />
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { if (window.confirm(`Install app update ${preparedUpdate.latest_version} and restart now?`)) void restartApplication(); }}>Restart & Install</button>}</div></div>
+      <div className="panel__header settings-card__header"><span><Sun size={16} /> Appearance</span></div>
+      <div className="settings-option">
+        <div className="settings-option__copy">
+          <div className="settings-option__title">Theme</div>
+          <div className="settings-option__hint">Switch app chrome, panels, forms, tables, and status surfaces. Logs stay terminal-dark for readability.</div>
+        </div>
+        <div className="theme-choice" role="radiogroup" aria-label="Theme">
+          <button className={`theme-choice__btn${themeMode === "dark" ? " theme-choice__btn--active" : ""}`} type="button" role="radio" aria-checked={themeMode === "dark"} onClick={() => onThemeModeChange("dark")}><Moon size={14} /> Dark</button>
+          <button className={`theme-choice__btn${themeMode === "light" ? " theme-choice__btn--active" : ""}`} type="button" role="radio" aria-checked={themeMode === "light"} onClick={() => onThemeModeChange("light")}><Sun size={14} /> Light</button>
+          <button className={`theme-choice__btn${themeMode === "system" ? " theme-choice__btn--active" : ""}`} type="button" role="radio" aria-checked={themeMode === "system"} onClick={() => onThemeModeChange("system")}><Monitor size={14} /> System</button>
+        </div>
+      </div>
+    </div>
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><UpdateStatusPill available={Boolean(appUpdate)} /><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { void restartApplication(); }}>Restart & Install</button>}</div></div>
       <div className="settings-option">
         <div className="settings-option__copy">
           <div className="settings-option__title">Auto check on startup</div>
@@ -141,19 +159,21 @@ export default function SettingsPage() {
         <div className="settings-meta-item"><span>Current</span><strong>{appVersion || "Unknown"}</strong></div>
         <div className="settings-meta-item"><span>Latest</span><strong>{appUpdate?.latest_version || "Unknown"}</strong></div>
         {preparedUpdate && <div><span className="badge badge--success">Ready {preparedUpdate.latest_version}</span></div>}
-        {appUpdate ? <span className="badge badge--pending">Update available</span> : appVersion.startsWith("dev-") ? <span className="badge badge--queued">Dev build</span> : <span className="badge badge--success">Up to date</span>}
       </div>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><div className="toolbar"><button className="btn btn--secondary" onClick={checkRuntimeUpdate} disabled={checkingRuntime || !runtime}><RefreshCw size={14} /> Check Update</button>{runtime?.update_available && <button className="btn btn--primary" onClick={() => { void runRuntimeUpdate(); }} disabled={updatingRuntime}><Download size={14} /> Update Now</button>}</div></div>
+      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><div className="toolbar"><UpdateStatusPill available={Boolean(runtime?.update_available)} /><button className="btn btn--secondary" onClick={checkRuntimeUpdate} disabled={checkingRuntime || !runtime}><RefreshCw size={14} /> Check Update</button>{runtime?.update_available && <button className="btn btn--primary" onClick={() => { void runRuntimeUpdate(); }} disabled={updatingRuntime}><Download size={14} /> Update Now</button>}</div></div>
       {runtime ? <div className="form-grid">
         <div>Installed: <strong>{runtime.installed_version || "None"}</strong> {runtime.installed_asset_name}</div>
         <div>Latest: <strong>{runtime.latest_version || "Unknown"}</strong></div>
         {runtime.pending_version && <div><span className="badge badge--pending">Pending {runtime.pending_version}</span></div>}
-        {runtime.update_available ? <span className="badge badge--pending">Update available</span> : <span className="badge badge--success">Up to date</span>}
       </div> : <div className="skeleton skeleton-row" />}
     </div>
   </div>;
+}
+
+function UpdateStatusPill({ available }: { available: boolean }) {
+  return <span className={`status-pill${available ? " status-pill--warning" : " status-pill--success"}`} aria-live="polite"><span className="status-pill__dot" />{available ? "Update available" : "Up to date"}</span>;
 }
 
 function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {

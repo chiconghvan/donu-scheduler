@@ -11,6 +11,7 @@ import SettingsPage from "./components/pages/SettingsPage";
 import TestLabPage from "./components/pages/TestLabPage";
 import Sidebar from "./components/shell/Sidebar";
 import WindowControls from "./components/shell/WindowControls";
+import { useTheme } from "./hooks/useTheme";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 
 type Page = "dashboard" | "store" | "testlab" | "jobs" | "activity" | "settings";
@@ -26,6 +27,7 @@ const titles: Record<Page, string> = {
 
 export default function App() {
   const [page, setPage] = useState<Page>("dashboard");
+  const theme = useTheme();
   const drag = useWindowDrag(getCurrentWindow());
 
   return (
@@ -52,7 +54,7 @@ export default function App() {
               {page === "testlab" && <TestLabPage />}
               {page === "jobs" && <JobsPage />}
               {page === "activity" && <ActivityPage />}
-              {page === "settings" && <SettingsPage />}
+              {page === "settings" && <SettingsPage themeMode={theme.themeMode} onThemeModeChange={theme.setThemeMode} />}
             </main>
           </div>
         </div>

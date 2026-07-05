@@ -59,7 +59,6 @@ export default function RuntimeToastHost() {
         action: {
           label: "Update",
           onClick: () => {
-            if (!window.confirm(`Download and install runtime update ${latest_version}?`)) return;
             api.updateRuntime().catch(() => {
               addToast({
                 type: "error",
@@ -114,7 +113,6 @@ export default function RuntimeToastHost() {
         action: {
           label: "Update",
           onClick: () => {
-            if (!window.confirm(`Update script ${event.payload.name} to ${event.payload.latest_version}?`)) return;
             api.updateScriptStore(event.payload.script_id).catch(() => {
               addToast({
                 type: "error",
@@ -147,7 +145,6 @@ export default function RuntimeToastHost() {
         action: {
           label: "Update",
           onClick: () => {
-            if (!window.confirm(`Download app update ${event.payload.latest_version} in background?`)) return;
             api.checkForAppUpdates().then((update) => {
               if (!update) throw new Error("App update no longer available");
               return api.downloadAndPrepareAppUpdate(update);
@@ -194,7 +191,6 @@ export default function RuntimeToastHost() {
         action: {
           label: "Install",
           onClick: () => {
-            if (!window.confirm(`Install app update ${event.payload.latest_version} and restart now?`)) return;
             api.restartApplication().catch(() => {
               addToast({ type: "error", title: "App restart failed", duration: 10000 });
             });

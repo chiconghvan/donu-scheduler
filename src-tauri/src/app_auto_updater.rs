@@ -325,33 +325,61 @@ fn spawn_silent_update_script(installer_path: PathBuf) -> Result<(), String> {
     let pid = std::process::id();
     let script_path = app_update_dir().join("install_pending_update.cmd");
     let log_path = app_update_dir().join("install_pending_update.log");
-    let installer_args = silent_installer_args(&installer_path)?;
+    let installer_kind = silent_installer_kind(&installer_path)?;
     let content = format!(
         "@echo off\r\n\
-setlocal\r\n\
+setlocal EnableDelayedExpansion\r\n\
 set \"APP_PID={}\"\r\n\
 set \"INSTALLER={}\"\r\n\
 set \"APP_EXE={}\"\r\n\
 set \"LOG_PATH={}\"\r\n\
+set \"INSTALLER_KIND={}\"\r\n\
+for %%I in (\"%APP_EXE%\") do set \"APP_DIR=%%~dpI\"\r\n\
 :wait_app\r\n\
 tasklist /fi \"PID eq %APP_PID%\" | findstr /r /c:\"[ ]%APP_PID%[ ]\" >nul\r\n\
 if not errorlevel 1 (\r\n\
   timeout /t 1 /nobreak >nul\r\n\
   goto wait_app\r\n\
 )\r\n\
-echo [%date% %time%] Running installer: \"%INSTALLER%\" {} > \"%LOG_PATH%\"\r\n\
-\"%INSTALLER%\" {} >> \"%LOG_PATH%\" 2>&1\r\n\
-set \"INSTALL_EXIT=%ERRORLEVEL%\"\r\n\
-echo [%date% %time%] Installer exit code: %INSTALL_EXIT% >> \"%LOG_PATH%\"\r\n\
+echo [%date% %time%] Starting silent update > \"%LOG_PATH%\"\r\n\
+echo [%date% %time%] App exe: \"%APP_EXE%\" >> \"%LOG_PATH%\"\r\n\
+echo [%date% %time%] Installer: \"%INSTALLER%\" >> \"%LOG_PATH%\"\r\n\
+if /i \"%INSTALLER_KIND%\"==\"exe\" (\r\n\
+  set \"UNINSTALLER=\"\r\n\
+  if exist \"%APP_DIR%uninstall.exe\" set \"UNINSTALLER=%APP_DIR%uninstall.exe\"\r\n\
+  if not defined UNINSTALLER if exist \"%APP_DIR%Uninstall.exe\" set \"UNINSTALLER=%APP_DIR%Uninstall.exe\"\r\n\
+  if not defined UNINSTALLER if exist \"%APP_DIR%Uninstall DonuScheduler.exe\" set \"UNINSTALLER=%APP_DIR%Uninstall DonuScheduler.exe\"\r\n\
+  if not defined UNINSTALLER if exist \"%APP_DIR%DonuScheduler Uninstall.exe\" set \"UNINSTALLER=%APP_DIR%DonuScheduler Uninstall.exe\"\r\n\
+  if not defined UNINSTALLER if exist \"%APP_DIR%unins000.exe\" set \"UNINSTALLER=%APP_DIR%unins000.exe\"\r\n\
+  if defined UNINSTALLER (\r\n\
+    echo [%date% %time%] Running uninstaller: \"%UNINSTALLER%\" /S >> \"%LOG_PATH%\"\r\n\
+    \"%UNINSTALLER%\" /S >> \"%LOG_PATH%\" 2>&1\r\n\
+    set \"UNINSTALL_EXIT=!ERRORLEVEL!\"\r\n\
+    echo [%date% %time%] Uninstaller exit code: !UNINSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
+    if not \"!UNINSTALL_EXIT!\"==\"0\" (\r\n\
+      start \"\" \"%APP_EXE%\"\r\n\
+      exit /b !UNINSTALL_EXIT!\r\n\
+    )\r\n\
+  ) else (\r\n\
+    echo [%date% %time%] No uninstaller found; installer will run over existing install >> \"%LOG_PATH%\"\r\n\
+  )\r\n\
+  echo [%date% %time%] Running NSIS installer: \"%INSTALLER%\" /S >> \"%LOG_PATH%\"\r\n\
+  \"%INSTALLER%\" /S >> \"%LOG_PATH%\" 2>&1\r\n\
+  set \"INSTALL_EXIT=!ERRORLEVEL!\"\r\n\
+) else (\r\n\
+  echo [%date% %time%] Running MSI installer: msiexec /i \"%INSTALLER%\" /quiet /norestart >> \"%LOG_PATH%\"\r\n\
+  msiexec /i \"%INSTALLER%\" /quiet /norestart >> \"%LOG_PATH%\" 2>&1\r\n\
+  set \"INSTALL_EXIT=!ERRORLEVEL!\"\r\n\
+)\r\n\
+echo [%date% %time%] Installer exit code: !INSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
 start \"\" \"%APP_EXE%\"\r\n\
-exit /b %INSTALL_EXIT%\r\n\
+exit /b !INSTALL_EXIT!\r\n\
 endlocal\r\n",
         pid,
         batch_escape(&installer_path.to_string_lossy()),
         batch_escape(&app_exe.to_string_lossy()),
         batch_escape(&log_path.to_string_lossy()),
-        installer_args,
-        installer_args,
+        installer_kind,
     );
     std::fs::write(&script_path, content).map_err(|e| e.to_string())?;
 
@@ -362,15 +390,15 @@ endlocal\r\n",
     Ok(())
 }
 
-fn silent_installer_args(installer_path: &Path) -> Result<&'static str, String> {
+fn silent_installer_kind(installer_path: &Path) -> Result<&'static str, String> {
     match installer_path
         .extension()
         .and_then(|ext| ext.to_str())
         .map(|ext| ext.to_ascii_lowercase())
         .as_deref()
     {
-        Some("exe") => Ok("/s /update"),
-        Some("msi") => Ok("/quiet"),
+        Some("exe") => Ok("exe"),
+        Some("msi") => Ok("msi"),
         _ => Err(format!(
             "Unsupported update installer type: {}",
             installer_path.display()
