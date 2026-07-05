@@ -108,10 +108,11 @@ pub fn runtime_exe_path_string() -> String {
 pub fn spawn_runtime_manager(
     app_handle: tauri::AppHandle,
     process_registry: Arc<Mutex<HashMap<String, u32>>>,
+    state: Arc<AppState>,
 ) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        if let Err(e) = ensure_runtime_on_startup(app_handle.clone(), Arc::clone(&process_registry)).await {
+        if let Err(e) = ensure_runtime_on_startup(app_handle.clone(), Arc::clone(&process_registry), Arc::clone(&state)).await {
             let _ = app_handle.emit("runtime-update-error", RuntimeUpdateErrorPayload { message: e });
         }
 
@@ -121,8 +122,11 @@ pub fn spawn_runtime_manager(
             if let Err(e) = apply_pending_update_if_possible(app_handle.clone(), Arc::clone(&process_registry)).await {
                 let _ = app_handle.emit("runtime-update-error", RuntimeUpdateErrorPayload { message: e });
             }
-            if last_release_check.elapsed() >= std::time::Duration::from_secs(2 * 60 * 60) {
+            if last_release_check.elapsed() >= std::time::Duration::from_secs(30 * 60) {
                 last_release_check = std::time::Instant::now();
+                if runtime_updates_disabled(&state).unwrap_or(true) {
+                    continue;
+                }
                 if let Err(e) = check_runtime_update(app_handle.clone(), Arc::clone(&process_registry), true).await {
                     let _ = app_handle.emit("runtime-update-error", RuntimeUpdateErrorPayload { message: e });
                 }
@@ -173,6 +177,7 @@ pub async fn get_runtime_status() -> Result<RuntimeStatus, String> {
 async fn ensure_runtime_on_startup(
     app_handle: tauri::AppHandle,
     process_registry: Arc<Mutex<HashMap<String, u32>>>,
+    state: Arc<AppState>,
 ) -> Result<(), String> {
     std::fs::create_dir_all(runtime_dir()).map_err(|e| e.to_string())?;
     apply_pending_update_if_possible(app_handle.clone(), Arc::clone(&process_registry)).await?;
@@ -187,6 +192,10 @@ async fn ensure_runtime_on_startup(
             },
         );
         install_runtime_asset(app_handle, process_registry, &asset, true).await?;
+        return Ok(());
+    }
+
+    if runtime_updates_disabled(&state).unwrap_or(true) {
         return Ok(());
     }
 
@@ -465,4 +474,12 @@ fn has_visible_window(app_handle: &tauri::AppHandle) -> bool {
     app_handle.webview_windows().values().any(|window| {
         window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false)
     })
+}
+
+fn runtime_updates_disabled(state: &Arc<AppState>) -> Result<bool, String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    let conn = crate::db::open_db(&db_path).map_err(|e| e.to_string())?;
+    Ok(crate::db::get_setting(&conn, "disable_runtime_updates")
+        .unwrap_or_else(|_| "false".to_string())
+        == "true")
 }

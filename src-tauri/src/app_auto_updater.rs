@@ -163,30 +163,34 @@ pub fn restart_application(
 pub fn spawn_app_update_check(app_handle: AppHandle, state: Arc<AppState>) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-        match is_app_update_disabled(&state) {
-            Ok(true) => return,
-            Ok(false) => {}
-            Err(e) => {
-                let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
-                return;
-            }
-        }
 
-        match check_latest_app_update().await {
-            Ok(Some(update)) => {
-                let _ = app_handle.emit(
-                    "app-update-available",
-                    AppUpdateAvailablePayload {
-                        current_version: update.current_version,
-                        latest_version: update.latest_version,
-                        asset_name: update.asset_name,
-                    },
-                );
+        loop {
+            match is_app_update_disabled(&state) {
+                Ok(true) => {}
+                Ok(false) => {
+                    match check_latest_app_update().await {
+                        Ok(Some(update)) => {
+                            let _ = app_handle.emit(
+                                "app-update-available",
+                                AppUpdateAvailablePayload {
+                                    current_version: update.current_version,
+                                    latest_version: update.latest_version,
+                                    asset_name: update.asset_name,
+                                },
+                            );
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
+                        }
+                    }
+                }
+                Err(e) => {
+                    let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
+                }
             }
-            Ok(None) => {}
-            Err(e) => {
-                let _ = app_handle.emit("app-update-error", AppUpdateErrorPayload { message: e });
-            }
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(30 * 60)).await;
         }
     });
 }

@@ -66,7 +66,7 @@ pub fn run() {
             let log_registry = Arc::clone(&state_handle.log_registry);
             let app_handle = app.handle().clone();
             app_auto_updater::spawn_app_update_check(app_handle.clone(), Arc::clone(&state_handle));
-            runtime_manager::spawn_runtime_manager(app_handle.clone(), Arc::clone(&registry));
+            runtime_manager::spawn_runtime_manager(app_handle.clone(), Arc::clone(&registry), Arc::clone(&state_handle));
             tauri::async_runtime::spawn(async move {
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(20)).await;

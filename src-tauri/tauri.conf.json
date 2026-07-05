@@ -15,8 +15,8 @@
         "title": "DonuScheduler",
         "width": 1100,
         "height": 750,
-        "minWidth": 640,
-        "minHeight": 400,
+        "minWidth": 980,
+        "minHeight": 680,
         "resizable": true,
         "decorations": false
       }

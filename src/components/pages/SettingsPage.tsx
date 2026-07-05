@@ -117,10 +117,11 @@ export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsP
     }
   }
 
-  if (loading || !settings) return <div className="page"><div className="skeleton skeleton-card" /></div>;
+  if (loading || !settings) return <div className="page settings-page"><div className="skeleton skeleton-card" /></div>;
 
-  return <div className="page">
+  return <div className="page settings-page">
     <div className="page__header"><h1 className="page__title"><SettingsIcon size={18} /> Settings</h1><button className="btn btn--primary" onClick={save} disabled={saving}><Save size={14} /> Save</button></div>
+    <div className="settings-page__body">
     <div className="card form-grid">
       <div className="section-title">Profile Managers</div>
       <Field label="GPMLogin API URL" value={settings.gpmlogin_api_base_url} onChange={(v) => setSettings({ ...settings, gpmlogin_api_base_url: v })} />
@@ -146,8 +147,8 @@ export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsP
       <div className="panel__header settings-card__header"><span><Download size={16} /> Application Update</span><div className="toolbar"><UpdateStatusPill available={Boolean(appUpdate)} /><button className="btn btn--secondary" onClick={checkAppUpdate} disabled={checkingApp}><RefreshCw size={14} /> Check Now</button>{appUpdate && !preparedUpdate && <button className="btn btn--primary" onClick={downloadAppUpdate} disabled={downloadingApp}><Download size={14} /> Download</button>}{preparedUpdate && <button className="btn btn--primary" onClick={() => { void restartApplication(); }}>Restart & Install</button>}</div></div>
       <div className="settings-option">
         <div className="settings-option__copy">
-          <div className="settings-option__title">Auto check on startup</div>
-          <div className="settings-option__hint">Checks GitHub for new app versions after launch. Downloads and installs still require confirmation.</div>
+          <div className="settings-option__title">Auto check update</div>
+          <div className="settings-option__hint">Automatically checks GitHub for new app versions every 30 minutes. Downloads and installs still require confirmation.</div>
         </div>
         <label className="toggle" aria-label="Auto check app updates">
           <input type="checkbox" checked={!settings.disable_auto_updates} onChange={(e) => setSettings({ ...settings, disable_auto_updates: !e.target.checked })} />
@@ -162,12 +163,24 @@ export default function SettingsPage({ themeMode, onThemeModeChange }: SettingsP
       </div>
     </div>
     <div className="card" style={{ marginTop: 16 }}>
-      <div className="panel__header" style={{ padding: 0, border: 0, marginBottom: 12 }}><span><Cpu size={16} /> Donumate Runtime</span><div className="toolbar"><UpdateStatusPill available={Boolean(runtime?.update_available)} /><button className="btn btn--secondary" onClick={checkRuntimeUpdate} disabled={checkingRuntime || !runtime}><RefreshCw size={14} /> Check Update</button>{runtime?.update_available && <button className="btn btn--primary" onClick={() => { void runRuntimeUpdate(); }} disabled={updatingRuntime}><Download size={14} /> Update Now</button>}</div></div>
-      {runtime ? <div className="form-grid">
-        <div>Installed: <strong>{runtime.installed_version || "None"}</strong> {runtime.installed_asset_name}</div>
-        <div>Latest: <strong>{runtime.latest_version || "Unknown"}</strong></div>
+      <div className="panel__header settings-card__header"><span><Cpu size={16} /> Donumate Runtime</span><div className="toolbar"><UpdateStatusPill available={Boolean(runtime?.update_available)} /><button className="btn btn--secondary" onClick={checkRuntimeUpdate} disabled={checkingRuntime || !runtime}><RefreshCw size={14} /> Check Update</button>{runtime?.update_available && <button className="btn btn--primary" onClick={() => { void runRuntimeUpdate(); }} disabled={updatingRuntime}><Download size={14} /> Update Now</button>}</div></div>
+      <div className="settings-option">
+        <div className="settings-option__copy">
+          <div className="settings-option__title">Auto check update</div>
+          <div className="settings-option__hint">Automatically checks GitHub for new runtime versions every 30 minutes. Updates apply when no runtime is running.</div>
+        </div>
+        <label className="toggle" aria-label="Auto check runtime updates">
+          <input type="checkbox" checked={!settings.disable_runtime_updates} onChange={(e) => setSettings({ ...settings, disable_runtime_updates: !e.target.checked })} />
+          <span className="toggle__track" />
+          <span className="toggle__thumb" />
+        </label>
+      </div>
+      {runtime ? <div className="settings-version-grid">
+        <div className="settings-meta-item"><span>Installed</span><strong>{runtime.installed_version || "None"} {runtime.installed_asset_name}</strong></div>
+        <div className="settings-meta-item"><span>Latest</span><strong>{runtime.latest_version || "Unknown"}</strong></div>
         {runtime.pending_version && <div><span className="badge badge--pending">Pending {runtime.pending_version}</span></div>}
       </div> : <div className="skeleton skeleton-row" />}
+    </div>
     </div>
   </div>;
 }

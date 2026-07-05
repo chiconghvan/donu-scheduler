@@ -205,6 +205,7 @@ export interface Settings {
   donutbrowser_api_base_url: string;
   global_max_parallel_runtime: number;
   disable_auto_updates: boolean;
+  disable_runtime_updates: boolean;
 }
 
 export interface AppUpdateInfo {

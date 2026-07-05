@@ -1,6 +1,6 @@
 import {
   LayoutDashboard,
-  Store,
+  FileCode2,
   PlaySquare,
   CalendarClock,
   Activity,
@@ -14,7 +14,7 @@ interface SidebarProps {
 
 const topItems = [
   { id: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { id: "store", icon: Store, label: "Script Store" },
+  { id: "store", icon: FileCode2, label: "Scripts Manager" },
   { id: "testlab", icon: PlaySquare, label: "Manual Run" },
   { id: "jobs", icon: CalendarClock, label: "Jobs" },
   { id: "activity", icon: Activity, label: "Activity" },

@@ -102,7 +102,7 @@ export default function LogViewer({
 
   return (
     <div
-      className={className}
+      className={["log-viewer", className].filter(Boolean).join(" ")}
       ref={containerRef}
       onScroll={handleScroll}
     >

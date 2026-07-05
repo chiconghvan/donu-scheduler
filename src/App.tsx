@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ToastProvider } from "./components/common/Toast";
 import { DialogProvider } from "./components/common/Dialog";
 import RuntimeToastHost from "./components/domain/RuntimeToastHost";
+import UpdateAvailableToast from "./components/domain/UpdateAvailableToast";
 import ActivityPage from "./components/pages/ActivityPage";
 import DashboardPage from "./components/pages/DashboardPage";
 import JobsPage from "./components/pages/JobsPage";
@@ -18,7 +19,7 @@ type Page = "dashboard" | "store" | "testlab" | "jobs" | "activity" | "settings"
 
 const titles: Record<Page, string> = {
   dashboard: "Dashboard",
-  store: "Script Store",
+  store: "Scripts Manager",
   testlab: "Manual Run",
   jobs: "Jobs",
   activity: "Activity",
@@ -59,6 +60,7 @@ export default function App() {
           </div>
         </div>
         <RuntimeToastHost />
+        <UpdateAvailableToast />
       </DialogProvider>
     </ToastProvider>
   );
