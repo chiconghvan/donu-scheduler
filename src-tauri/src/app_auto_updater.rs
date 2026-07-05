@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 const RELEASES_API_URL: &str = "https://api.github.com/repos/chiconghvan/donu-scheduler/releases?per_page=100";
 const UPDATE_DIR_NAME: &str = "updates";
 const PENDING_INSTALLER_PATH_KEY: &str = "pending_installer_path";
@@ -368,7 +371,6 @@ if /i \"%INSTALLER_KIND%\"==\"exe\" (\r\n\
     set \"UNINSTALL_EXIT=!ERRORLEVEL!\"\r\n\
     echo [%date% %time%] Uninstaller exit code: !UNINSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
     if not \"!UNINSTALL_EXIT!\"==\"0\" (\r\n\
-      start \"\" \"%APP_EXE%\"\r\n\
       exit /b !UNINSTALL_EXIT!\r\n\
     )\r\n\
   ) else (\r\n\
@@ -385,8 +387,8 @@ if /i \"%INSTALLER_KIND%\"==\"exe\" (\r\n\
 echo [%date% %time%] Installer exit code: !INSTALL_EXIT! >> \"%LOG_PATH%\"\r\n\
 if \"!INSTALL_EXIT!\"==\"0\" (\r\n\
   del /f /q \"%INSTALLER%\" >> \"%LOG_PATH%\" 2>&1\r\n\
+  start \"\" \"%APP_EXE%\"\r\n\
 )\r\n\
-start \"\" \"%APP_EXE%\"\r\n\
 exit /b !INSTALL_EXIT!\r\n\
 endlocal\r\n",
         pid,
@@ -397,8 +399,20 @@ endlocal\r\n",
     );
     std::fs::write(&script_path, content).map_err(|e| e.to_string())?;
 
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &script_path.to_string_lossy()])
+    let mut command = std::process::Command::new("cmd");
+    command
+        .args(["/C", &script_path.to_string_lossy()])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    #[cfg(target_os = "windows")]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command
         .spawn()
         .map_err(|e| e.to_string())?;
     Ok(())
