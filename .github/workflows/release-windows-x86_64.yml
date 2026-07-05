@@ -70,3 +70,5 @@ jobs:
             ${{ steps.installer.outputs.path }}
             ${{ steps.portable.outputs.path }}
           generate_release_notes: true
+          overwrite: true
+          make_latest: true
