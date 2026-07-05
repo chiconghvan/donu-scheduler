@@ -933,19 +933,24 @@ table.table {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--space-4);
   overflow: hidden;
 }
 
 .activity-content--idle {
-  grid-template-rows: min-content minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .activity-active-panel,
 .activity-history-panel {
   min-height: 0;
   min-width: 0;
+}
+
+.activity-active-panel .panel__body {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .activity-history-panel .panel__body {
@@ -1114,10 +1119,13 @@ table.table {
   height: 75vh;
   max-width: 90vw;
   max-height: 85vh;
+  min-width: min(400px, 92vw);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 0;
+  background: var(--bg-raised);
+  color: var(--fg-primary);
 }
 
 .log-dialog__header {
@@ -1126,6 +1134,17 @@ table.table {
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-raised);
+  color: var(--fg-primary);
+  position: relative;
+  z-index: 1;
+}
+
+.log-dialog__body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  overflow: hidden;
 }
 
 .profile-picker-dialog {
@@ -1279,9 +1298,12 @@ table.table {
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  height: 6px;
+  height: 9px;
   margin-top: var(--space-2);
   overflow: hidden;
+}
+.toast__progress--download {
+  height: 6px;
 }
 .toast__progress-fill {
   background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
@@ -1319,9 +1341,11 @@ table.table {
   line-height: 1.6;
   padding: var(--space-2);
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden;
   flex: 1;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
 }
 
 .log-dialog .log-viewer {

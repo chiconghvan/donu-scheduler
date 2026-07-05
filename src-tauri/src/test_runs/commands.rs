@@ -99,7 +99,7 @@ pub async fn run_script_test(
             "running",
         );
 
-        let result = match runner::spawn_runtime(&request) {
+        let result = match runner::spawn_runtime_queued(&request).await {
             Ok(spawned) => {
                 // Register PID immediately before waiting
                 if let Some(pid) = spawned.pid {
@@ -262,7 +262,7 @@ pub async fn run_batch_test(
                 "running",
             );
 
-            let result = match runner::spawn_runtime(&request) {
+            let result = match runner::spawn_runtime_queued(&request).await {
                 Ok(spawned) => {
                     // Register PID immediately before waiting
                     if let Some(pid) = spawned.pid {

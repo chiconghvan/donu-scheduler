@@ -271,7 +271,7 @@ async fn process_job(
         let app_handle_clone = app_handle.clone();
 
         tokio::spawn(async move {
-            let result = match runner::spawn_runtime(&request) {
+            let result = match runner::spawn_runtime_queued(&request).await {
                 Ok(spawned) => {
                     // Register PID in in-memory registry immediately
                     if let Some(pid) = spawned.pid {

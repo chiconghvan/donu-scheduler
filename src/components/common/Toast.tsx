@@ -23,6 +23,7 @@ interface ToastOptions {
   action?: ToastAction;
   key?: string;
   progress?: number;
+  progressClassName?: string;
 }
 
 interface ToastItem extends ToastOptions {
@@ -90,7 +91,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <div className="toast__title">{toast.title}</div>
               {toast.message && <div className="toast__message">{toast.message}</div>}
               {typeof toast.progress === "number" && (
-                <div className="toast__progress" aria-label={`Progress ${Math.round(toast.progress)}%`}>
+                <div className={`toast__progress${toast.progressClassName ? ` ${toast.progressClassName}` : ""}`} aria-label={`Progress ${Math.round(toast.progress)}%`}>
                   <div className="toast__progress-fill" style={{ width: `${Math.max(0, Math.min(100, toast.progress))}%` }} />
                 </div>
               )}

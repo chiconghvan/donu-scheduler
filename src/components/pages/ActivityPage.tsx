@@ -79,7 +79,7 @@ export default function ActivityPage() {
         })}</tbody></table></div>
       </section>
     </div>
-    {log && <div className="dialog-backdrop" onClick={() => setLog(null)}><div className="dialog log-dialog" onClick={(e) => e.stopPropagation()}><div className="dialog__header log-dialog__header">Log <button className="btn btn--sm btn--secondary" onClick={() => setLog(null)}>Close</button></div><LogViewer kind={log.kind} runId={log.runId} running={log.running} /></div></div>}
+    {log && <div className="dialog-backdrop" onClick={() => setLog(null)}><div className="dialog log-dialog" onClick={(e) => e.stopPropagation()}><div className="dialog__header log-dialog__header">Log <button className="btn btn--sm btn--secondary" onClick={() => setLog(null)}>Close</button></div><div className="log-dialog__body"><LogViewer kind={log.kind} runId={log.runId} running={log.running} /></div></div></div>}
   </div>;
 }
 
@@ -104,6 +104,6 @@ function getGroupStatus(group: HistoryTask): string {
 }
 
 function ResultCount({ group }: { group: HistoryTask }) {
-  const done = group.children.filter((child) => child.status !== "running" && child.status !== "queued").length;
+  const done = group.children.filter((child) => child.status === "success").length;
   return <span className="history-result-count"><CheckCircle2 size={14} /> {done}/{group.children.length}</span>;
 }

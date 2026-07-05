@@ -1,8 +1,12 @@
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tauri::Emitter;
+
+static LAST_RUNTIME_SPAWN_AT: OnceLock<tokio::sync::Mutex<Option<Instant>>> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 pub struct LogEventPayload {
@@ -35,6 +39,23 @@ pub struct SpawnedProcess {
     pub pid: Option<u32>,
     pub log_prefix: String,
     pub log_path: Option<String>,
+}
+
+pub async fn spawn_runtime_queued(request: &RunnerRequest) -> Result<SpawnedProcess, RunnerOutcome> {
+    let gate = LAST_RUNTIME_SPAWN_AT.get_or_init(|| tokio::sync::Mutex::new(None));
+    let mut last_spawn_at = gate.lock().await;
+
+    if let Some(last) = *last_spawn_at {
+        let delay = Duration::from_millis(1000 + rand::random::<u64>() % 1000);
+        let elapsed = last.elapsed();
+        if elapsed < delay {
+            tokio::time::sleep(delay - elapsed).await;
+        }
+    }
+
+    let result = spawn_runtime(request);
+    *last_spawn_at = Some(Instant::now());
+    result
 }
 
 pub fn spawn_runtime(request: &RunnerRequest) -> Result<SpawnedProcess, RunnerOutcome> {

@@ -31,6 +31,7 @@ export default function RuntimeToastHost() {
         title: "Runtime download",
         message: `Downloading ${event.payload.asset_name} (${event.payload.version})...`,
         progress: 0,
+        progressClassName: "toast__progress--download",
         duration: 0,
       });
     }).then((u) => unlisteners.push(u));
@@ -44,6 +45,7 @@ export default function RuntimeToastHost() {
         title: "Runtime download",
         message: `Downloading ${asset_name} (${version})... ${percent}%`,
         progress: percent,
+        progressClassName: "toast__progress--download",
         duration: 0,
       });
     }).then((u) => unlisteners.push(u));
@@ -78,6 +80,7 @@ export default function RuntimeToastHost() {
         title: event.payload.initial_install ? "Runtime ready" : "Runtime updated",
         message: `Runtime ${event.payload.asset_name} (${event.payload.version}) ${event.payload.initial_install ? "installed" : "updated"}.`,
         progress: 100,
+        progressClassName: "toast__progress--download",
         duration: 10000,
       });
     }).then((u) => unlisteners.push(u));
@@ -89,6 +92,7 @@ export default function RuntimeToastHost() {
         title: "Runtime update pending",
         message: `${event.payload.asset_name} (${event.payload.version}) downloaded. It will apply when no runtime is running.`,
         progress: 100,
+        progressClassName: "toast__progress--download",
         duration: 10000,
       });
     }).then((u) => unlisteners.push(u));
@@ -163,6 +167,7 @@ export default function RuntimeToastHost() {
         title: "App update download",
         message: `Downloading ${event.payload.asset_name} (${event.payload.latest_version})...`,
         progress: 0,
+        progressClassName: "toast__progress--download",
         duration: 0,
       });
     }).then((u) => unlisteners.push(u));
@@ -176,6 +181,7 @@ export default function RuntimeToastHost() {
         title: "App update download",
         message: `Downloading ${asset_name} (${latest_version})... ${percent}%`,
         progress: percent,
+        progressClassName: "toast__progress--download",
         duration: 0,
       });
     }).then((u) => unlisteners.push(u));
@@ -187,6 +193,7 @@ export default function RuntimeToastHost() {
         title: "App update ready",
         message: `${event.payload.asset_name} downloaded. Restart to install.`,
         progress: 100,
+        progressClassName: "toast__progress--download",
         duration: 0,
         action: {
           label: "Install",

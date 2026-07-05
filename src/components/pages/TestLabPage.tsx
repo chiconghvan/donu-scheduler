@@ -60,7 +60,7 @@ export default function TestLabPage() {
     try { run.batch_id ? await stopBatchTestRun(run.batch_id) : await stopTestRun(run.id); await load(); } catch (err) { addToast({ type: "error", title: "Stop failed", message: String(err) }); }
   }
 
-  const previewProfiles = selectedJobProfiles.slice(0, 6);
+
 
   return <div className="page test-lab-page"><div className="page__header"><h1 className="page__title"><PlaySquare size={18} /> Manual Run</h1><button className="btn btn--secondary" onClick={load}><RefreshCw size={14} /> Refresh</button></div>
     <div className="split-layout split-layout--40-60">
@@ -68,10 +68,8 @@ export default function TestLabPage() {
         <label className="field"><span className="field__label">Script</span><select className="select" value={scriptId} onChange={(e) => setScriptId(e.target.value)}><option value="">Select script</option>{scripts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <div className="section-title">Profiles</div>
         <div className="job-profile-picker-row">
-          <button className="btn btn--secondary" type="button" onClick={() => setPickerOpen(true)}><Users size={14} /> Select Profiles</button>
-          <span className="job-profile-count">{selectedJobProfiles.length} selected</span>
+          <button className="btn btn--secondary" type="button" onClick={() => setPickerOpen(true)}><Users size={14} /> Select Profiles ({selectedJobProfiles.length})</button>
         </div>
-        {selectedJobProfiles.length > 0 ? <div className="job-profile-chips">{previewProfiles.map((p) => <span className="job-profile-chip" key={`${p.manager}-${p.id}`}><ManagerBadge manager={p.manager} /> {p.name}</span>)}{selectedJobProfiles.length > previewProfiles.length && <span className="job-profile-chip job-profile-chip--muted">+{selectedJobProfiles.length - previewProfiles.length} more</span>}</div> : <div className="empty-inline">No profiles selected</div>}
         {scriptId && <><div className="section-title">Inputs</div><DefaultInputs inputs={inputs} onChange={setInputs} /><label className="field"><span className="field__label">CLI Args</span><textarea className="textarea" value={cliArgs} onChange={(e) => setCliArgs(e.target.value)} /></label></>}
         <div className="page__actions"><button className="btn btn--primary" disabled={!scriptId || selectedJobProfiles.length === 0} onClick={() => void run(false)}><Play size={14} /> Run</button><button className="btn btn--primary" disabled={!scriptId || selectedJobProfiles.length < 2} onClick={() => void run(true)}><Play size={14} /> Run Batch ({selectedJobProfiles.length})</button></div>
       </div></section>
