@@ -21,33 +21,48 @@ impl GpmGlobalClient {
     }
 
     async fn list_groups(&self) -> Result<Vec<(String, String)>, String> {
-        let url = format!("{}/api/v1/groups", self.base_url);
-        let resp = reqwest::get(&url)
-            .await
-            .map_err(|e| format!("GPMGlobal groups request failed: {e}"))?;
-
-        if !resp.status().is_success() {
-            return Err(format!(
-                "GPMGlobal groups returned status: {}",
-                resp.status()
-            ));
-        }
-
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("GPMGlobal groups parse error: {e}"))?;
-
-        let data = body["data"]
-            .as_array()
-            .ok_or_else(|| "GPMGlobal groups: 'data' is not an array".to_string())?;
-
         let mut groups = Vec::new();
-        for g in data {
-            if let (Some(id), Some(name)) = (g["id"].as_str(), g["name"].as_str()) {
-                groups.push((id.to_string(), name.to_string()));
+        let mut page = 1;
+
+        loop {
+            let url = format!(
+                "{}/api/v1/groups?page={}&page_size=100",
+                self.base_url, page
+            );
+            let resp = reqwest::get(&url)
+                .await
+                .map_err(|e| format!("GPMGlobal groups request failed: {e}"))?;
+
+            if !resp.status().is_success() {
+                return Err(format!(
+                    "GPMGlobal groups returned status: {}",
+                    resp.status()
+                ));
             }
+
+            let body: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| format!("GPMGlobal groups parse error: {e}"))?;
+
+            let data = body["data"]["data"]
+                .as_array()
+                .ok_or_else(|| "GPMGlobal groups: 'data.data' is not an array".to_string())?;
+
+            for g in data {
+                if let (Some(id), Some(name)) = (g["id"].as_str(), g["name"].as_str()) {
+                    groups.push((id.to_string(), name.to_string()));
+                }
+            }
+
+            let current_page = body["data"]["current_page"].as_i64().unwrap_or(1);
+            let last_page = body["data"]["last_page"].as_i64().unwrap_or(1);
+            if current_page >= last_page {
+                break;
+            }
+            page += 1;
         }
+
         Ok(groups)
     }
 
