@@ -46,5 +46,9 @@ export function parseCachedInputsOrDefault(
   defaultJson: string
 ): DefaultInput[] {
   const cached = parseDefaultInputsJson(cacheJson);
-  return cached.length > 0 ? cached : parseDefaultInputsJson(defaultJson);
+  const defaults = parseDefaultInputsJson(defaultJson);
+  if (cached.length === 0) return defaults;
+
+  const cachedByName = new Map(cached.map((input) => [input.name, input]));
+  return defaults.map((input) => cachedByName.get(input.name) || input);
 }

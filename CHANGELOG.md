@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.8] - 2026-07-07
+
+### Fixed
+- Refresh script inputs from source file so manual run uses current input list
+
 ## [v0.7.7] - 2026-07-07
 
 ### Fixed
@@ -217,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.7...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.8...HEAD
+[v0.7.8]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.7...v0.7.8
 [v0.7.7]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.6...v0.7.7
 [v0.7.6]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.5...v0.7.6
 [v0.7.5]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.4...v0.7.5

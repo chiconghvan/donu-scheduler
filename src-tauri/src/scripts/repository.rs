@@ -1,39 +1,48 @@
 use crate::db::open_db;
 use crate::models::{new_id, now_iso, Script, ScriptInput};
 use rusqlite::params;
+use serde_json::Value;
+use std::fs;
 use std::path::PathBuf;
 
 pub fn list_scripts(db_path: &PathBuf) -> Result<Vec<Script>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare("SELECT id, name, description, script_path, default_args, default_inputs_json, created_at, updated_at FROM scripts ORDER BY created_at DESC")
-        .map_err(|e| e.to_string())?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Script {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                description: row.get(2)?,
-                script_path: row.get(3)?,
-                default_args: row.get(4)?,
-                default_inputs_json: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-
     let mut result = Vec::new();
-    for row in rows {
-        result.push(row.map_err(|e| e.to_string())?);
+    {
+        let mut stmt = conn
+            .prepare("SELECT id, name, description, script_path, default_args, default_inputs_json, created_at, updated_at FROM scripts ORDER BY created_at DESC")
+            .map_err(|e| e.to_string())?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(Script {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    description: row.get(2)?,
+                    script_path: row.get(3)?,
+                    default_args: row.get(4)?,
+                    default_inputs_json: row.get(5)?,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+
+        for row in rows {
+            result.push(row.map_err(|e| e.to_string())?);
+        }
+    }
+
+    for script in result.iter_mut() {
+        let refreshed = refresh_script_defaults_if_needed(&conn, script)?;
+        *script = refreshed;
     }
     Ok(result)
 }
 
 pub fn get_script(db_path: &PathBuf, id: &str) -> Result<Script, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
-    conn.query_row(
+    let script = conn.query_row(
         "SELECT id, name, description, script_path, default_args, default_inputs_json, created_at, updated_at FROM scripts WHERE id = ?1",
         params![id],
         |row| {
@@ -49,7 +58,8 @@ pub fn get_script(db_path: &PathBuf, id: &str) -> Result<Script, String> {
             })
         },
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    refresh_script_defaults_if_needed(&conn, &script)
 }
 
 pub fn create_script(db_path: &PathBuf, input: &ScriptInput) -> Result<Script, String> {
@@ -94,4 +104,79 @@ pub fn delete_script(db_path: &PathBuf, id: &str) -> Result<(), String> {
         return Err(format!("Script not found: {id}"));
     }
     Ok(())
+}
+
+fn refresh_script_defaults_if_needed(conn: &rusqlite::Connection, script: &Script) -> Result<Script, String> {
+    let refreshed = read_default_inputs_from_path(&script.script_path).unwrap_or_else(|_| script.default_inputs_json.clone());
+    if refreshed != script.default_inputs_json {
+        let now = now_iso();
+        conn.execute(
+            "UPDATE scripts SET default_inputs_json=?1, updated_at=?2 WHERE id=?3",
+            params![refreshed, now, script.id],
+        )
+        .map_err(|e| e.to_string())?;
+
+        return Ok(Script {
+            default_inputs_json: refreshed,
+            updated_at: now,
+            ..script.clone()
+        });
+    }
+
+    Ok(script.clone())
+}
+
+fn read_default_inputs_from_path(path: &str) -> Result<String, String> {
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+    let cleaned = content.trim_start_matches('\u{feff}');
+    let root: Value = serde_json::from_str(cleaned).map_err(|e| e.to_string())?;
+    let mut inputs = Vec::<Value>::new();
+
+    fn collect(nodes: &[Value], results: &mut Vec<Value>) {
+        for node in nodes {
+            if let Some(obj) = node.as_object() {
+                if obj.get("type").and_then(|v| v.as_i64()) == Some(1) {
+                    if let Some(raw_input) = obj.get("raw_input").and_then(|v| v.as_str()) {
+                        if let Ok(raw) = serde_json::from_str::<Vec<Value>>(raw_input) {
+                            let allow = raw.iter().any(|item| {
+                                item.get("Key").and_then(|v| v.as_str()) == Some("ALLOW_USER_INPUT")
+                                    && item.get("Value").and_then(|v| v.as_str()) == Some("True")
+                            });
+                            if allow {
+                                let get_val = |key: &str| {
+                                    raw.iter()
+                                        .find(|item| item.get("Key").and_then(|v| v.as_str()) == Some(key))
+                                        .and_then(|item| item.get("Value"))
+                                        .cloned()
+                                        .unwrap_or(Value::String(String::new()))
+                                };
+                                results.push(serde_json::json!({
+                                    "name": get_val("NAME"),
+                                    "comment": get_val("COMMENT"),
+                                    "value": get_val("DEFAULT_VALUE"),
+                                    "inputType": get_val("INPUT_TYPE"),
+                                    "comboboxData": get_val("COMBOBOX_DATA"),
+                                }));
+                            }
+                        }
+                    }
+                }
+                if let Some(children) = obj.get("children").and_then(|v| v.as_array()) {
+                    collect(children, results);
+                }
+                if let Some(children) = obj.get("items").and_then(|v| v.as_array()) {
+                    collect(children, results);
+                }
+            }
+        }
+    }
+
+    if let Some(children) = root.get("children").and_then(|v| v.as_array()) {
+        collect(children, &mut inputs);
+    }
+    if let Some(items) = root.get("items").and_then(|v| v.as_array()) {
+        collect(items, &mut inputs);
+    }
+
+    serde_json::to_string(&inputs).map_err(|e| e.to_string())
 }
