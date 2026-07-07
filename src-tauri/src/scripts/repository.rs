@@ -147,35 +147,46 @@ fn read_default_inputs_from_path(path: &str) -> Result<String, String> {
                                     raw.iter()
                                         .find(|item| item.get("Key").and_then(|v| v.as_str()) == Some(key))
                                         .and_then(|item| item.get("Value"))
-                                        .cloned()
-                                        .unwrap_or(Value::String(String::new()))
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
                                 };
                                 results.push(serde_json::json!({
-                                    "name": get_val("NAME"),
-                                    "comment": get_val("COMMENT"),
-                                    "value": get_val("DEFAULT_VALUE"),
-                                    "inputType": get_val("INPUT_TYPE"),
+                                    "name": obj.get("output_variable_name").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "comment": obj.get("comment").and_then(|v| v.as_str()).unwrap_or(""),
+                                    "value": get_val("VALUE"),
+                                    "inputType": match get_val("USER_INPUT_TYPE") {
+                                        "" => "Text",
+                                        value => value,
+                                    },
                                     "comboboxData": get_val("COMBOBOX_DATA"),
                                 }));
                             }
                         }
                     }
                 }
-                if let Some(children) = obj.get("children").and_then(|v| v.as_array()) {
-                    collect(children, results);
-                }
-                if let Some(children) = obj.get("items").and_then(|v| v.as_array()) {
-                    collect(children, results);
+                for key in ["nodes", "then_nodes", "else_nodes"] {
+                    if let Some(children) = obj.get(key).and_then(|v| v.as_array()) {
+                        collect(children, results);
+                    }
                 }
             }
         }
     }
 
-    if let Some(children) = root.get("children").and_then(|v| v.as_array()) {
-        collect(children, &mut inputs);
-    }
-    if let Some(items) = root.get("items").and_then(|v| v.as_array()) {
-        collect(items, &mut inputs);
+    match root {
+        Value::Array(nodes) => collect(&nodes, &mut inputs),
+        Value::Object(obj) => {
+            for section in ["before_init", "main_logic"] {
+                if let Some(nodes) = obj
+                    .get(section)
+                    .and_then(|v| v.get("nodes"))
+                    .and_then(|v| v.as_array())
+                {
+                    collect(nodes, &mut inputs);
+                }
+            }
+        }
+        _ => {}
     }
 
     serde_json::to_string(&inputs).map_err(|e| e.to_string())

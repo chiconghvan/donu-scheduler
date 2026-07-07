@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Refresh script inputs from source file so manual run uses current input list
+- Parse refreshed script inputs with same `.gscript` schema used by manual import
 
 ## [v0.7.7] - 2026-07-07
 
