@@ -416,15 +416,20 @@ pub fn apply_pending_updates() -> Result<Vec<ScriptStoreUpdateApplied>, String> 
             })
         })
         .map_err(|e| e.to_string())?;
+    let records = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    drop(stmt);
 
     let mut applied = Vec::new();
-    for row in rows {
-        let record = row.map_err(|e| e.to_string())?;
+    for record in records {
         let pending_path = record
             .pending_path
             .clone()
             .ok_or_else(|| "Missing pending path".to_string())?;
         if !Path::new(&pending_path).exists() {
+            conn.execute(
+                "UPDATE script_store_installs SET pending_path=NULL, pending_version=NULL, pending_sha256=NULL, pending_source_tag=NULL, pending_asset_name=NULL, updated_at=?1 WHERE store_script_id=?2",
+                params![now_iso(), record.store_script_id],
+            ).map_err(|e| e.to_string())?;
             continue;
         }
         let script = ScriptStoreScript {

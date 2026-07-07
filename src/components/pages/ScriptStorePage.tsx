@@ -140,9 +140,12 @@ export default function ScriptStorePage() {
     setBusyId(script.id);
     try {
       if (!script.installed) await installScriptStore(script.id);
-      else await updateScriptStore(script.id);
+      else {
+        await updateScriptStore(script.id);
+        await applyPendingScriptStoreUpdates();
+      }
       await Promise.all([loadManaged(), loadStore(true)]);
-      addToast({ type: "success", title: script.installed ? "Update queued" : "Script installed", message: script.name });
+      addToast({ type: "success", title: script.installed ? "Script updated" : "Script installed", message: script.name });
     } catch (err) {
       addToast({ type: "error", title: "Action failed", message: String(err) });
     } finally {
@@ -395,14 +398,13 @@ function InputCountBadge({ count }: { count: number }) {
 }
 
 function StoreBadge({ script }: { script: ScriptStoreScript }) {
-  if (script.pending_update) return <span className="badge badge--pending">Pending</span>;
   if (script.update_available) return <span className="badge badge--queued">Update</span>;
+  if (script.pending_update) return <span className="badge badge--pending">Pending</span>;
   if (script.installed) return <span className="badge badge--success">Installed</span>;
   return <span className="badge badge--scheduled">Available</span>;
 }
 
 function StoreStatusAction({ script, busy, onAction }: { script: ScriptStoreScript; busy: boolean; onAction: () => void }) {
-  if (script.pending_update) return <StoreBadge script={script} />;
   if (script.update_available || !script.installed) {
     return <button className="btn btn--sm btn--primary" disabled={busy} onClick={(event) => { event.stopPropagation(); onAction(); }}><Download size={12} />{script.installed ? "Update" : "Install"}</button>;
   }
