@@ -2,17 +2,18 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 40vh);
   gap: var(--space-4);
   overflow: hidden;
 }
 
 .activity-content--idle {
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 40vh);
 }
 
 .activity-active-panel,
 .activity-history-panel {
+  max-height: 40vh;
   min-height: 0;
   min-width: 0;
 }
@@ -24,11 +25,11 @@
 
 .activity-history-panel .panel__body {
   min-width: 0;
-  overflow-x: auto;
+  overflow: auto;
 }
 
 .activity-content--idle .activity-active-panel .panel__body {
-  flex: 0 0 auto;
+  flex: 1;
 }
 
 .activity-content--idle .activity-active-panel .empty-state {

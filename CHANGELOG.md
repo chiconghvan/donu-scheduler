@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.10] - 2026-07-08
+
+### Fixed
+- Limit Activity history panel height and keep Active Tasks using remaining space
+- Move edit job Cancel and Save Job actions into the Edit Job header
+
 ## [v0.7.9] - 2026-07-08
 
 ### Fixed
@@ -229,7 +235,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.9...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.10...HEAD
+[v0.7.10]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.9...v0.7.10
 [v0.7.9]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.8...v0.7.9
 [v0.7.8]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.7...v0.7.8
 [v0.7.7]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.6...v0.7.7
