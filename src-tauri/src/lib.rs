@@ -51,7 +51,7 @@ pub fn run() {
         db_path: Mutex::new(db_path.clone()),
         process_registry: Arc::new(Mutex::new(HashMap::new())),
         log_registry: Arc::new(Mutex::new(run_logs::LogRegistry::default())),
-        run_semaphore: Arc::new(tokio::sync::Semaphore::new(max_parallel)),
+        runtime_limiter: Arc::new(db::RuntimeLimiter::new(max_parallel)),
     });
 
     let db_for_scheduler = db_path.clone();
@@ -64,6 +64,7 @@ pub fn run() {
             let state_handle = app.state::<Arc<AppState>>();
             let registry = Arc::clone(&state_handle.process_registry);
             let log_registry = Arc::clone(&state_handle.log_registry);
+            let runtime_limiter = Arc::clone(&state_handle.runtime_limiter);
             let app_handle = app.handle().clone();
             app_auto_updater::emit_pending_app_update_ready(
                 app_handle.clone(),
@@ -82,6 +83,7 @@ pub fn run() {
                         db_for_scheduler.clone(),
                         registry.clone(),
                         log_registry.clone(),
+                        runtime_limiter.clone(),
                         app_handle.clone(),
                     )
                     .await;

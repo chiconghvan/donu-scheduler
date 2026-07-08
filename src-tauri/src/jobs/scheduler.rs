@@ -1,3 +1,4 @@
+use crate::db::RuntimeLimiter;
 use crate::models::{JobDefinition, JobProfileRef, JobProfileState, JobRun, ScheduleConfig};
 use crate::runner;
 use crate::runner::RunnerRequest;
@@ -10,6 +11,7 @@ pub async fn scheduler_tick(
     db_path: PathBuf,
     process_registry: Arc<Mutex<HashMap<String, u32>>>,
     log_registry: Arc<Mutex<crate::run_logs::LogRegistry>>,
+    runtime_limiter: Arc<RuntimeLimiter>,
     app_handle: tauri::AppHandle,
 ) {
     // Reconcile stale "running" states: verify PID is still alive
@@ -28,6 +30,7 @@ pub async fn scheduler_tick(
             &job,
             &process_registry,
             &log_registry,
+            &runtime_limiter,
             &app_handle,
         )
         .await
@@ -106,6 +109,7 @@ async fn process_job(
     job: &JobDefinition,
     process_registry: &Arc<Mutex<HashMap<String, u32>>>,
     log_registry: &Arc<Mutex<crate::run_logs::LogRegistry>>,
+    runtime_limiter: &Arc<RuntimeLimiter>,
     app_handle: &tauri::AppHandle,
 ) -> Result<(), String> {
     let profiles: Vec<JobProfileRef> = serde_json::from_str(&job.profile_ids_json)
@@ -280,9 +284,12 @@ async fn process_job(
         let run_id_for_registry = run_id.clone();
         let registry_clone = Arc::clone(process_registry);
         let log_registry = Arc::clone(log_registry);
+        let runtime_limiter = Arc::clone(runtime_limiter);
         let app_handle_clone = app_handle.clone();
 
         tokio::spawn(async move {
+            let _permit = runtime_limiter.acquire().await;
+
             let result = match runner::spawn_runtime_queued(&request).await {
                 Ok(spawned) => {
                     // Register PID in in-memory registry immediately

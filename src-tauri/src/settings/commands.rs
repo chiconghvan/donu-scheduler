@@ -16,5 +16,12 @@ pub fn update_settings(
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::settings::repository::update_settings(&db_path, &settings)?;
     crate::run_logs::cleanup_old_logs(&db_path)?;
+    let max_parallel = usize::try_from(settings.global_max_parallel_runtime)
+        .unwrap_or(1)
+        .max(1);
+    let limiter = Arc::clone(&state.runtime_limiter);
+    tauri::async_runtime::spawn(async move {
+        limiter.set_max_parallel(max_parallel).await;
+    });
     Ok(())
 }

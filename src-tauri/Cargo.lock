@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "donu-scheduler"
-version = "0.7.8"
+version = "0.7.9"
 dependencies = [
  "chrono",
  "dirs",

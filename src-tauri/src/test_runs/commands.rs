@@ -88,10 +88,10 @@ pub async fn run_script_test(
     let run_id_for_registry = run_id.clone();
     let registry = Arc::clone(&state.process_registry);
     let log_registry = Arc::clone(&state.log_registry);
-    let semaphore = Arc::clone(&state.run_semaphore);
+    let runtime_limiter = Arc::clone(&state.runtime_limiter);
 
     tokio::spawn(async move {
-        let _permit = semaphore.acquire().await.unwrap();
+        let _permit = runtime_limiter.acquire().await;
 
         if crate::test_runs::repository::get_test_run_status(&db_path_clone, &run_id_clone)
             .map(|s| s == "stopped")
@@ -260,11 +260,11 @@ pub async fn run_batch_test(
         let run_id_for_registry = run_id.clone();
         let registry = Arc::clone(&state.process_registry);
         let log_registry = Arc::clone(&state.log_registry);
-        let semaphore = Arc::clone(&state.run_semaphore);
+        let runtime_limiter = Arc::clone(&state.runtime_limiter);
         let app_handle_clone = app_handle.clone();
 
         tokio::spawn(async move {
-            let _permit = semaphore.acquire().await.unwrap();
+            let _permit = runtime_limiter.acquire().await;
 
             if crate::test_runs::repository::get_test_run_status(&db_path_clone, &run_id_clone)
                 .map(|s| s == "stopped")

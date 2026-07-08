@@ -3,12 +3,75 @@ use rusqlite::{Connection, Result as SqlResult};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 pub struct AppState {
     pub db_path: Mutex<PathBuf>,
     pub process_registry: Arc<Mutex<HashMap<String, u32>>>,
     pub log_registry: Arc<Mutex<LogRegistry>>,
-    pub run_semaphore: Arc<tokio::sync::Semaphore>,
+    pub runtime_limiter: Arc<RuntimeLimiter>,
+}
+
+struct RuntimeLimiterState {
+    max_parallel: usize,
+    running_count: usize,
+}
+
+pub struct RuntimeLimiter {
+    state: AsyncMutex<RuntimeLimiterState>,
+    notify: Notify,
+}
+
+pub struct RuntimePermit {
+    limiter: Arc<RuntimeLimiter>,
+}
+
+impl RuntimeLimiter {
+    pub fn new(max_parallel: usize) -> Self {
+        Self {
+            state: AsyncMutex::new(RuntimeLimiterState {
+                max_parallel: max_parallel.max(1),
+                running_count: 0,
+            }),
+            notify: Notify::new(),
+        }
+    }
+
+    pub async fn acquire(self: &Arc<Self>) -> RuntimePermit {
+        loop {
+            {
+                let mut state = self.state.lock().await;
+                if state.running_count < state.max_parallel {
+                    state.running_count += 1;
+                    return RuntimePermit {
+                        limiter: Arc::clone(self),
+                    };
+                }
+            }
+            self.notify.notified().await;
+        }
+    }
+
+    pub async fn set_max_parallel(&self, max_parallel: usize) {
+        {
+            let mut state = self.state.lock().await;
+            state.max_parallel = max_parallel.max(1);
+        }
+        self.notify.notify_waiters();
+    }
+}
+
+impl Drop for RuntimePermit {
+    fn drop(&mut self) {
+        let limiter = Arc::clone(&self.limiter);
+        tokio::spawn(async move {
+            {
+                let mut state = limiter.state.lock().await;
+                state.running_count = state.running_count.saturating_sub(1);
+            }
+            limiter.notify.notify_waiters();
+        });
+    }
 }
 
 pub fn get_db_path(app_dir: &PathBuf) -> PathBuf {
