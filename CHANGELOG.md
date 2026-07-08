@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.11] - 2026-07-08
+
+### Fixed
+- Persist job input values per job and use them for scheduled runtime runs
+- Refresh queued job runtime args from latest saved job input values before spawning
+- Preserve Windows path backslashes when parsing quoted CLI arguments
+
 ## [v0.7.10] - 2026-07-08
 
 ### Fixed
@@ -235,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.10...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.11...HEAD
+[v0.7.11]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.10...v0.7.11
 [v0.7.10]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.9...v0.7.10
 [v0.7.9]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.8...v0.7.9
 [v0.7.8]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.7...v0.7.8

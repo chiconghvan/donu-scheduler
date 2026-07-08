@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub fn list_jobs(db_path: &PathBuf) -> Result<Vec<JobDefinition>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, timeout_seconds, created_at, updated_at FROM jobs ORDER BY created_at DESC")
+        .prepare("SELECT id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, default_inputs_json, timeout_seconds, created_at, updated_at FROM jobs ORDER BY created_at DESC")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -21,9 +21,10 @@ pub fn list_jobs(db_path: &PathBuf) -> Result<Vec<JobDefinition>, String> {
                 schedule_json: row.get(6)?,
                 random_json: row.get(7)?,
                 cli_args: row.get(8)?,
-                timeout_seconds: row.get(9)?,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                default_inputs_json: row.get(9)?,
+                timeout_seconds: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -38,7 +39,7 @@ pub fn list_jobs(db_path: &PathBuf) -> Result<Vec<JobDefinition>, String> {
 pub fn list_enabled_jobs(db_path: &PathBuf) -> Result<Vec<JobDefinition>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, timeout_seconds, created_at, updated_at FROM jobs WHERE enabled = 1 ORDER BY created_at DESC")
+        .prepare("SELECT id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, default_inputs_json, timeout_seconds, created_at, updated_at FROM jobs WHERE enabled = 1 ORDER BY created_at DESC")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -53,9 +54,10 @@ pub fn list_enabled_jobs(db_path: &PathBuf) -> Result<Vec<JobDefinition>, String
                 schedule_json: row.get(6)?,
                 random_json: row.get(7)?,
                 cli_args: row.get(8)?,
-                timeout_seconds: row.get(9)?,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                default_inputs_json: row.get(9)?,
+                timeout_seconds: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -70,7 +72,7 @@ pub fn list_enabled_jobs(db_path: &PathBuf) -> Result<Vec<JobDefinition>, String
 pub fn get_job(db_path: &PathBuf, id: &str) -> Result<JobDefinition, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     conn.query_row(
-        "SELECT id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, timeout_seconds, created_at, updated_at FROM jobs WHERE id = ?1",
+        "SELECT id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, default_inputs_json, timeout_seconds, created_at, updated_at FROM jobs WHERE id = ?1",
         params![id],
         |row| {
             Ok(JobDefinition {
@@ -83,9 +85,10 @@ pub fn get_job(db_path: &PathBuf, id: &str) -> Result<JobDefinition, String> {
                 schedule_json: row.get(6)?,
                 random_json: row.get(7)?,
                 cli_args: row.get(8)?,
-                timeout_seconds: row.get(9)?,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                default_inputs_json: row.get(9)?,
+                timeout_seconds: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         },
     )
@@ -100,8 +103,8 @@ pub fn create_job(db_path: &PathBuf, input: &JobInput) -> Result<JobDefinition, 
     validate_job_input(input)?;
 
     conn.execute(
-        "INSERT INTO jobs (id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, timeout_seconds, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
-        params![id, input.name, input.description, input.enabled, input.script_id, input.profile_ids_json, input.schedule_json, input.random_json, input.cli_args, input.timeout_seconds, now, now],
+        "INSERT INTO jobs (id, name, description, enabled, script_id, profile_ids_json, schedule_json, random_json, cli_args, default_inputs_json, timeout_seconds, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)",
+        params![id, input.name, input.description, input.enabled, input.script_id, input.profile_ids_json, input.schedule_json, input.random_json, input.cli_args, input.default_inputs_json, input.timeout_seconds, now, now],
     )
     .map_err(|e| e.to_string())?;
 
@@ -116,8 +119,8 @@ pub fn update_job(db_path: &PathBuf, id: &str, input: &JobInput) -> Result<JobDe
 
     let affected = conn
         .execute(
-            "UPDATE jobs SET name=?1, description=?2, enabled=?3, script_id=?4, profile_ids_json=?5, schedule_json=?6, random_json=?7, cli_args=?8, timeout_seconds=?9, updated_at=?10 WHERE id=?11",
-            params![input.name, input.description, input.enabled, input.script_id, input.profile_ids_json, input.schedule_json, input.random_json, input.cli_args, input.timeout_seconds, now, id],
+            "UPDATE jobs SET name=?1, description=?2, enabled=?3, script_id=?4, profile_ids_json=?5, schedule_json=?6, random_json=?7, cli_args=?8, default_inputs_json=?9, timeout_seconds=?10, updated_at=?11 WHERE id=?12",
+            params![input.name, input.description, input.enabled, input.script_id, input.profile_ids_json, input.schedule_json, input.random_json, input.cli_args, input.default_inputs_json, input.timeout_seconds, now, id],
         )
         .map_err(|e| e.to_string())?;
 
@@ -463,6 +466,9 @@ fn validate_job_input(input: &JobInput) -> Result<(), String> {
     }
 
     // cli_args is plain text, no validation needed
+
+    serde_json::from_str::<serde_json::Value>(&input.default_inputs_json)
+        .map_err(|e| format!("Invalid default_inputs_json: {e}"))?;
 
     Ok(())
 }

@@ -45,17 +45,13 @@ fn split_cli_args(input: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
-    let mut escaped = false;
+    let mut chars = input.chars().peekable();
 
-    for ch in input.chars() {
-        if escaped {
-            current.push(ch);
-            escaped = false;
-            continue;
-        }
-
+    while let Some(ch) = chars.next() {
         match ch {
-            '\\' if in_quotes => escaped = true,
+            '\\' if in_quotes && matches!(chars.peek(), Some('"' | '\\')) => {
+                current.push(chars.next().unwrap());
+            }
             '"' => in_quotes = !in_quotes,
             ch if ch.is_whitespace() && !in_quotes => {
                 if !current.is_empty() {
@@ -66,9 +62,6 @@ fn split_cli_args(input: &str) -> Vec<String> {
         }
     }
 
-    if escaped {
-        current.push('\\');
-    }
     if !current.is_empty() {
         args.push(current);
     }

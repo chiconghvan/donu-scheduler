@@ -55,8 +55,7 @@ export default function JobsPage() {
   function startCreate() { setCreateOpen(true); setValidationErrors([]); setForm(emptyForm); setSchedule(defaultScheduleUi); setProfiles([]); setInputs([]); }
   function startEdit(job: JobDefinition) {
     setMode("edit"); setValidationErrors([]); setSelectedId(job.id); setForm({ name: job.name, description: job.description, script_id: job.script_id, cli_args: job.cli_args, timeout_seconds: job.timeout_seconds }); setSchedule(jsonToSchedule(job.schedule_json, job.random_json)); setProfiles(parseSelectedProfiles(job.profile_ids_json));
-    const script = scripts.find((s) => s.id === job.script_id); setInputs(parseDefaultInputsJson(script?.default_inputs_json || "[]"));
-    void getInputCache(job.script_id).then((c) => { setInputs(parseCachedInputsOrDefault(c.default_inputs_json, script?.default_inputs_json || "[]")); }).catch(() => undefined);
+    const script = scripts.find((s) => s.id === job.script_id); setInputs(parseCachedInputsOrDefault(job.default_inputs_json, script?.default_inputs_json || "[]"));
   }
   async function onScriptChange(id: string) { setForm({ ...form, script_id: id }); const script = scripts.find((s) => s.id === id); setInputs(parseDefaultInputsJson(script?.default_inputs_json || "[]")); try { const cache = await getInputCache(id); setInputs(parseCachedInputsOrDefault(cache.default_inputs_json, script?.default_inputs_json || "[]")); setForm((f) => ({ ...f, cli_args: cache.cli_args })); } catch { /* ignore */ } }
 
@@ -72,7 +71,7 @@ export default function JobsPage() {
     const errors = validate();
     setValidationErrors(errors);
     if (errors.length > 0) { addToast({ type: "warning", title: "Missing required fields" }); return; }
-    const input: JobInput = { name: form.name, description: form.description, enabled: 1, script_id: form.script_id, profile_ids_json: JSON.stringify(profiles), schedule_json: scheduleToJson(schedule), random_json: randomToJson(schedule), cli_args: form.cli_args, timeout_seconds: form.timeout_seconds };
+    const input: JobInput = { name: form.name, description: form.description, enabled: 1, script_id: form.script_id, profile_ids_json: JSON.stringify(profiles), schedule_json: scheduleToJson(schedule), random_json: randomToJson(schedule), cli_args: form.cli_args, default_inputs_json: JSON.stringify(inputs), timeout_seconds: form.timeout_seconds };
     setSaving(true);
     try { await saveInputCache(form.script_id, form.cli_args, JSON.stringify(inputs)); const saved = isCreate ? await createJob(input) : selectedId ? await updateJob(selectedId, input) : await createJob(input); setMode("view"); setCreateOpen(false); setSelectedId(saved.id); await load(); addToast({ type: "success", title: "Job saved" }); } catch (err) { addToast({ type: "error", title: "Save failed", message: String(err) }); } finally { setSaving(false); }
   }

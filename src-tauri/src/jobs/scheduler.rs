@@ -3,6 +3,7 @@ use crate::models::{JobDefinition, JobProfileRef, JobProfileState, JobRun, Sched
 use crate::runner;
 use crate::runner::RunnerRequest;
 use chrono::{Duration, NaiveDateTime, NaiveTime};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -248,71 +249,61 @@ async fn process_job(
         let current_success_count = state.success_count;
         let current_failed_count = state.failed_count;
 
-        let script_path = job.script_path_for_run(&db_path_clone).unwrap_or_default();
-        let job_cli_args = job.cli_args.clone();
+        let job_id = job.id.clone();
         let job_schedule_json = job.schedule_json.clone();
-
-        // Runtime is managed in app data; only API URL remains configurable.
-        let (runtime_path, default_api_url) = {
-            if let Ok(conn) = crate::db::open_db(&db_path_clone) {
-                let setting_key = match profile.manager.as_str() {
-                    "gpm" => "gpmlogin_api_base_url",
-                    "gpmglobal" => "gpmglobal_api_base_url",
-                    _ => "donutbrowser_api_base_url",
-                };
-                let api = crate::db::get_setting(&conn, setting_key)
-                    .unwrap_or_else(|_| default_api_url_for_manager(&profile.manager));
-                (crate::runtime_manager::runtime_exe_path_string(), api)
-            } else {
-                (
-                    crate::runtime_manager::runtime_exe_path_string(),
-                    default_api_url_for_manager(&profile.manager),
-                )
-            }
-        };
-
-        let request = RunnerRequest {
-            script_path,
-            profile_id: profile.id.clone(),
-            cli_args: job_cli_args.clone(),
-            runtime_path,
-            log_path: Some(log_path.clone()),
-            manager: profile.manager.clone(),
-            api_url: default_api_url,
-        };
 
         let run_id_for_registry = run_id.clone();
         let registry_clone = Arc::clone(process_registry);
         let log_registry = Arc::clone(log_registry);
         let runtime_limiter = Arc::clone(runtime_limiter);
         let app_handle_clone = app_handle.clone();
+        let profile_for_run = profile.clone();
 
         tokio::spawn(async move {
             let _permit = runtime_limiter.acquire().await;
 
-            let result = match runner::spawn_runtime_queued(&request).await {
-                Ok(spawned) => {
-                    // Register PID in in-memory registry immediately
-                    if let Some(pid) = spawned.pid {
-                        if let Ok(mut reg) = registry_clone.lock() {
-                            reg.insert(run_id_for_registry.clone(), pid);
+            let result = match build_runner_request_for_job(
+                &db_path_clone,
+                &job_id,
+                &profile_for_run,
+                Some(log_path.clone()),
+            ) {
+                Ok(request) => match runner::spawn_runtime_queued(&request).await {
+                    Ok(spawned) => {
+                        // Register PID in in-memory registry immediately
+                        if let Some(pid) = spawned.pid {
+                            if let Ok(mut reg) = registry_clone.lock() {
+                                reg.insert(run_id_for_registry.clone(), pid);
+                            }
+                            // Store PID in database
+                            let _ = crate::jobs::repository::update_job_run_pid(
+                                &db_path_clone,
+                                &run_id_clone,
+                                Some(pid),
+                            );
                         }
-                        // Store PID in database
-                        let _ = crate::jobs::repository::update_job_run_pid(
-                            &db_path_clone,
-                            &run_id_clone,
-                            Some(pid),
-                        );
+                        runner::wait_runtime(
+                            spawned,
+                            run_id_clone.clone(),
+                            app_handle_clone,
+                            log_registry,
+                        )
+                        .await
                     }
-                    runner::wait_runtime(
-                        spawned,
-                        run_id_clone.clone(),
-                        app_handle_clone,
-                        log_registry,
-                    )
-                    .await
+                    Err(outcome) => outcome,
+                },
+                Err(error_message) => {
+                    crate::run_logs::append_spawn_error(
+                        &log_path,
+                        &format!("[runner] {error_message}\n"),
+                    );
+                    runner::RunnerOutcome {
+                        success: false,
+                        exit_code: None,
+                        error_message: Some(error_message),
+                        log_path: Some(log_path.clone()),
+                    }
                 }
-                Err(outcome) => outcome,
             };
 
             let finished_at = crate::models::now_iso();
@@ -550,6 +541,105 @@ fn default_api_url_for_manager(manager: &str) -> String {
         "gpmglobal" => "http://127.0.0.1:9495".to_string(),
         _ => "http://127.0.0.1:10108".to_string(),
     }
+}
+
+fn build_runner_request_for_job(
+    db_path: &PathBuf,
+    job_id: &str,
+    profile: &JobProfileRef,
+    log_path: Option<String>,
+) -> Result<RunnerRequest, String> {
+    let job = crate::jobs::repository::get_job(db_path, job_id)?;
+    let script_path = job.script_path_for_run(db_path).unwrap_or_default();
+    let cli_args = build_cli_args(&job.default_inputs_json, &job.cli_args);
+    let (runtime_path, api_url) = if let Ok(conn) = crate::db::open_db(db_path) {
+        let setting_key = match profile.manager.as_str() {
+            "gpm" => "gpmlogin_api_base_url",
+            "gpmglobal" => "gpmglobal_api_base_url",
+            _ => "donutbrowser_api_base_url",
+        };
+        let api = crate::db::get_setting(&conn, setting_key)
+            .unwrap_or_else(|_| default_api_url_for_manager(&profile.manager));
+        (crate::runtime_manager::runtime_exe_path_string(), api)
+    } else {
+        (
+            crate::runtime_manager::runtime_exe_path_string(),
+            default_api_url_for_manager(&profile.manager),
+        )
+    };
+
+    Ok(RunnerRequest {
+        script_path,
+        profile_id: profile.id.clone(),
+        cli_args,
+        runtime_path,
+        log_path,
+        manager: profile.manager.clone(),
+        api_url,
+    })
+}
+
+#[derive(Deserialize)]
+struct JobInputValue {
+    name: String,
+    value: String,
+}
+
+fn build_cli_args(default_inputs_json: &str, cli_args: &str) -> String {
+    let mut args = Vec::new();
+    if let Ok(inputs) = serde_json::from_str::<Vec<JobInputValue>>(default_inputs_json) {
+        for input in inputs {
+            if input.value.trim().is_empty() {
+                continue;
+            }
+            args.push("--input".to_string());
+            args.push(format!("{}={}", input.name, input.value));
+        }
+    }
+    args.extend(split_cli_args(cli_args));
+    join_cli_args(&args)
+}
+
+fn split_cli_args(input: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '\\' if in_quotes && matches!(chars.peek(), Some('"' | '\\')) => {
+                current.push(chars.next().unwrap());
+            }
+            '"' => in_quotes = !in_quotes,
+            ch if ch.is_whitespace() && !in_quotes => {
+                if !current.is_empty() {
+                    args.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if !current.is_empty() {
+        args.push(current);
+    }
+
+    args
+}
+
+fn join_cli_args(args: &[String]) -> String {
+    args.iter()
+        .map(|arg| quote_cli_arg(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn quote_cli_arg(arg: &str) -> String {
+    if !arg.chars().any(|ch| ch.is_whitespace() || ch == '"') {
+        return arg.to_string();
+    }
+    format!("\"{}\"", arg.replace('"', "\\\""))
 }
 
 impl JobDefinition {

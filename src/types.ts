@@ -79,6 +79,7 @@ export interface JobDefinition {
   schedule_json: string;
   random_json: string;
   cli_args: string;
+  default_inputs_json: string;
   timeout_seconds: number;
   created_at: string;
   updated_at: string;
@@ -93,6 +94,7 @@ export interface JobInput {
   schedule_json: string;
   random_json: string;
   cli_args: string;
+  default_inputs_json: string;
   timeout_seconds: number;
 }
 

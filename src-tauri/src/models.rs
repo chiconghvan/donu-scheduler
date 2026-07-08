@@ -34,6 +34,7 @@ pub struct JobDefinition {
     pub schedule_json: String,
     pub random_json: String,
     pub cli_args: String,
+    pub default_inputs_json: String,
     pub timeout_seconds: i32,
     pub created_at: String,
     pub updated_at: String,
@@ -49,6 +50,7 @@ pub struct JobInput {
     pub schedule_json: String,
     pub random_json: String,
     pub cli_args: String,
+    pub default_inputs_json: String,
     pub timeout_seconds: i32,
 }
 

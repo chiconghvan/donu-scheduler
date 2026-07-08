@@ -108,6 +108,7 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
             schedule_json TEXT NOT NULL DEFAULT '{}',
             random_json TEXT NOT NULL DEFAULT '{}',
             cli_args TEXT NOT NULL DEFAULT '',
+            default_inputs_json TEXT NOT NULL DEFAULT '[]',
             timeout_seconds INTEGER NOT NULL DEFAULT 300,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -230,6 +231,23 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
 
     if !has_pid_col {
         conn.execute_batch("ALTER TABLE job_runs ADD COLUMN pid INTEGER;")?;
+    }
+
+    // Migration: add per-job input values if missing
+    let has_job_inputs_col: bool = conn
+        .prepare("PRAGMA table_info(jobs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "default_inputs_json"))
+        })
+        .unwrap_or(false);
+
+    if !has_job_inputs_col {
+        conn.execute_batch(
+            "ALTER TABLE jobs ADD COLUMN default_inputs_json TEXT NOT NULL DEFAULT '[]';",
+        )?;
     }
 
     // Migration: add batch_id to test_runs if missing
