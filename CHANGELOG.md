@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.7.12] - 2026-07-08
+
+### Added
+- Add Activity tabs for active tasks and run history
+- Add sortable Name, Group, and Browser Type columns to profile picker
+
+### Changed
+- Add DonuScheduler release deploy skill documentation
+
+### Fixed
+- Prevent Create Job dialog from closing when clicking outside the modal
+- Fill missing profile names and groups in run history and active job tasks from profile cache
+
 ## [v0.7.11] - 2026-07-08
 
 ### Fixed
@@ -242,7 +255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.11...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.12...HEAD
+[v0.7.12]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.11...v0.7.12
 [v0.7.11]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.10...v0.7.11
 [v0.7.10]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.9...v0.7.10
 [v0.7.9]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.8...v0.7.9

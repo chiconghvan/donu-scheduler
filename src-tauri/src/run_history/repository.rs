@@ -17,8 +17,8 @@ pub fn list_run_history(db_path: &PathBuf) -> Result<Vec<RunHistoryItem>, String
                     tr.script_id AS script_id,
                     s.name AS script_name,
                     tr.profile_id AS profile_id,
-                    tr.profile_name AS profile_name,
-                    tr.group_name AS group_name,
+                    COALESCE(NULLIF(tr.profile_name, ''), pc.profile_name, tr.profile_id) AS profile_name,
+                    COALESCE(tr.group_name, pc.group_name) AS group_name,
                     tr.status AS status,
                     tr.started_at AS started_at,
                     tr.finished_at AS finished_at,
@@ -32,6 +32,7 @@ pub fn list_run_history(db_path: &PathBuf) -> Result<Vec<RunHistoryItem>, String
                     tr.updated_at AS updated_at
                 FROM test_runs tr
                 LEFT JOIN scripts s ON s.id = tr.script_id
+                LEFT JOIN profile_cache pc ON pc.profile_id = tr.profile_id AND pc.manager = tr.manager
 
                 UNION ALL
 
@@ -43,8 +44,8 @@ pub fn list_run_history(db_path: &PathBuf) -> Result<Vec<RunHistoryItem>, String
                     jr.script_id AS script_id,
                     s.name AS script_name,
                     jr.profile_id AS profile_id,
-                    jr.profile_name AS profile_name,
-                    jr.group_name AS group_name,
+                    COALESCE(NULLIF(jr.profile_name, ''), pc.profile_name, jr.profile_id) AS profile_name,
+                    COALESCE(jr.group_name, pc.group_name) AS group_name,
                     jr.status AS status,
                     jr.started_at AS started_at,
                     jr.finished_at AS finished_at,
@@ -59,6 +60,9 @@ pub fn list_run_history(db_path: &PathBuf) -> Result<Vec<RunHistoryItem>, String
                 FROM job_runs jr
                 LEFT JOIN jobs j ON j.id = jr.job_id
                 LEFT JOIN scripts s ON s.id = jr.script_id
+                LEFT JOIN profile_cache pc ON pc.profile_id = jr.profile_id AND pc.manager = (
+                    SELECT manager FROM profile_cache WHERE profile_id = jr.profile_id ORDER BY updated_at DESC LIMIT 1
+                )
             )
             ORDER BY created_at DESC
             LIMIT 200

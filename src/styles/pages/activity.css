@@ -1,19 +1,16 @@
 .activity-content {
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 40vh);
-  gap: var(--space-4);
   overflow: hidden;
 }
 
-.activity-content--idle {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 40vh);
+.activity-tabs {
+  margin-bottom: var(--space-4);
 }
 
 .activity-active-panel,
 .activity-history-panel {
-  max-height: 40vh;
+  height: 100%;
   min-height: 0;
   min-width: 0;
 }
@@ -28,11 +25,11 @@
   overflow: auto;
 }
 
-.activity-content--idle .activity-active-panel .panel__body {
+.activity-active-panel .panel__body {
   flex: 1;
 }
 
-.activity-content--idle .activity-active-panel .empty-state {
+.activity-active-panel .empty-state {
   min-height: 0;
   padding: var(--space-4);
 }

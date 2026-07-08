@@ -186,12 +186,12 @@ fn list_job_tasks(db_path: &PathBuf) -> Result<Vec<RunningTask>, String> {
     let today = crate::models::today_iso();
     let conn = crate::db::open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(
-        "SELECT j.id, j.name, j.script_id, s.name, st.id, st.profile_id, COALESCE(pc.profile_name, st.profile_id), st.status, st.next_run_at, st.current_run_id, jr.pid, jr.started_at, jr.finished_at, jr.exit_code, jr.error_message
+        "SELECT j.id, j.name, j.script_id, s.name, st.id, st.profile_id, COALESCE(NULLIF(jr.profile_name, ''), pc.profile_name, st.profile_id), st.status, st.next_run_at, st.current_run_id, jr.pid, jr.started_at, jr.finished_at, jr.exit_code, jr.error_message, pc.manager
          FROM job_profile_states st
          JOIN jobs j ON j.id = st.job_id
          LEFT JOIN scripts s ON s.id = j.script_id
          LEFT JOIN job_runs jr ON jr.id = st.current_run_id
-         LEFT JOIN profile_cache pc ON pc.profile_id = st.profile_id AND pc.manager = 'donut'
+         LEFT JOIN profile_cache pc ON pc.profile_id = st.profile_id AND pc.manager = (SELECT manager FROM profile_cache WHERE profile_id = st.profile_id ORDER BY updated_at DESC LIMIT 1)
          WHERE j.enabled = 1 AND st.date = ?1 AND st.status IN ('running','pending','scheduled')
          ORDER BY j.created_at DESC, st.profile_id",
     ).map_err(|e| e.to_string())?;
@@ -214,7 +214,7 @@ fn list_job_tasks(db_path: &PathBuf) -> Result<Vec<RunningTask>, String> {
                     run_id: row.get(9)?,
                     profile_id: row.get(5)?,
                     profile_name: row.get(6)?,
-                    manager: Some("donut".to_string()),
+                    manager: row.get(15)?,
                     pid: row.get(10)?,
                     status,
                     started_at: row.get(11)?,

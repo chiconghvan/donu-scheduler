@@ -290,7 +290,7 @@ pub fn get_latest_job_profile_state(
 pub fn list_job_runs(db_path: &PathBuf, job_id: &str) -> Result<Vec<JobRun>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, job_id, profile_id, script_id, status, started_at, finished_at, exit_code, pid, log_path, error_message, profile_name, group_name, created_at FROM job_runs WHERE job_id=?1 ORDER BY created_at DESC LIMIT 100")
+        .prepare("SELECT jr.id, jr.job_id, jr.profile_id, jr.script_id, jr.status, jr.started_at, jr.finished_at, jr.exit_code, jr.pid, jr.log_path, jr.error_message, COALESCE(NULLIF(jr.profile_name, ''), pc.profile_name, jr.profile_id), COALESCE(jr.group_name, pc.group_name), jr.created_at FROM job_runs jr LEFT JOIN profile_cache pc ON pc.profile_id = jr.profile_id AND pc.manager = (SELECT manager FROM profile_cache WHERE profile_id = jr.profile_id ORDER BY updated_at DESC LIMIT 1) WHERE jr.job_id=?1 ORDER BY jr.created_at DESC LIMIT 100")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt

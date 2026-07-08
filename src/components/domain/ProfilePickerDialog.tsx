@@ -4,6 +4,10 @@ import { useProfiles } from "../../hooks/useProfiles";
 import { useMultiSelect } from "../../hooks/useMultiSelect";
 import { Search } from "lucide-react";
 
+type SortKey = "name" | "group_name" | "browser_type";
+type SortDirection = "asc" | "desc";
+type SortState = { key: SortKey; direction: SortDirection };
+
 const managers: { key: ManagerKey; label: string }[] = [
   { key: "gpm", label: "GPM" },
   { key: "donut", label: "Donut" },
@@ -31,6 +35,8 @@ export default function ProfilePickerDialog({
   const [leftGroup, setLeftGroup] = useState("all");
   const [leftSelectedIds, setLeftSelectedIds] = useState<Set<string>>(new Set());
   const [rightSelectedIds, setRightSelectedIds] = useState<Set<string>>(new Set());
+  const [leftSort, setLeftSort] = useState<SortState>({ key: "name", direction: "asc" });
+  const [rightSort, setRightSort] = useState<SortState>({ key: "name", direction: "asc" });
 
   const {
     profiles: leftProfiles,
@@ -90,12 +96,22 @@ export default function ProfilePickerDialog({
       );
   }, [draft, rightTab, rightSearch]);
 
+  const sortedAvailableProfiles = useMemo(
+    () => sortProfiles(availableProfiles, leftSort),
+    [availableProfiles, leftSort],
+  );
+
+  const sortedSelectedProfiles = useMemo(
+    () => sortProfiles(selectedProfiles, rightSort),
+    [selectedProfiles, rightSort],
+  );
+
   // Multi-select hooks
-  const leftMulti = useMultiSelect(availableProfiles, leftSelectedIds, setLeftSelectedIds);
-  const rightMulti = useMultiSelect(selectedProfiles, rightSelectedIds, setRightSelectedIds);
+  const leftMulti = useMultiSelect(sortedAvailableProfiles, leftSelectedIds, setLeftSelectedIds);
+  const rightMulti = useMultiSelect(sortedSelectedProfiles, rightSelectedIds, setRightSelectedIds);
 
   const addProfiles = () => {
-    const adding = availableProfiles
+    const adding = sortedAvailableProfiles
       .filter((p) => leftSelectedIds.has(p.id))
       .map((p) => ({
         id: p.id,
@@ -134,6 +150,26 @@ export default function ProfilePickerDialog({
       setIds((prev) => new Set([...prev, ...items.map((p) => p.id)]));
     }
   };
+
+  const toggleSort = (setSort: Dispatch<SetStateAction<SortState>>, key: SortKey) => {
+    setSort((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const renderSortHeader = (label: string, key: SortKey, sort: SortState, setSort: Dispatch<SetStateAction<SortState>>) => (
+    <th>
+      <button
+        className="btn btn--ghost"
+        type="button"
+        onClick={() => toggleSort(setSort, key)}
+        style={{ padding: 0, font: "inherit" }}
+      >
+        {label} {sort.key === key ? (sort.direction === "asc" ? "A-Z" : "Z-A") : ""}
+      </button>
+    </th>
+  );
 
   const renderProfileRows = <T extends ProfileSummary | SelectedJobProfile>(items: T[], selectedIds: Set<string>, multi: ReturnType<typeof useMultiSelect<T>>) => items.map((p, i) => (
     <tr
@@ -206,9 +242,9 @@ export default function ProfilePickerDialog({
               )}
             </div>
 
-            <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, availableProfiles, setLeftSelectedIds)}>
+            <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, sortedAvailableProfiles, setLeftSelectedIds)}>
               {leftLoading && <div className="empty-inline">Loading...</div>}
-              <table className="table profile-table"><thead><tr><th className="profile-table__index" onClick={() => toggleVisible(availableProfiles, setLeftSelectedIds)}>#</th><th>Name</th><th>Group</th><th>Browser Type</th></tr></thead><tbody>{renderProfileRows(availableProfiles, leftSelectedIds, leftMulti)}</tbody></table>
+              <table className="table profile-table"><thead><tr><th className="profile-table__index" onClick={() => toggleVisible(sortedAvailableProfiles, setLeftSelectedIds)}>#</th>{renderSortHeader("Name", "name", leftSort, setLeftSort)}{renderSortHeader("Group", "group_name", leftSort, setLeftSort)}{renderSortHeader("Browser Type", "browser_type", leftSort, setLeftSort)}</tr></thead><tbody>{renderProfileRows(sortedAvailableProfiles, leftSelectedIds, leftMulti)}</tbody></table>
               {!leftLoading && availableProfiles.length === 0 && (
                 <div className="empty-inline">No profiles</div>
               )}
@@ -263,8 +299,8 @@ export default function ProfilePickerDialog({
               />
             </div>
 
-            <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, selectedProfiles, setRightSelectedIds)}>
-              <table className="table profile-table"><thead><tr><th className="profile-table__index" onClick={() => toggleVisible(selectedProfiles, setRightSelectedIds)}>#</th><th>Name</th><th>Group</th><th>Browser Type</th></tr></thead><tbody>{renderProfileRows(selectedProfiles, rightSelectedIds, rightMulti)}</tbody></table>
+            <div className="profile-picker-dialog__table-wrap" tabIndex={0} onKeyDown={(e) => selectVisible(e, sortedSelectedProfiles, setRightSelectedIds)}>
+              <table className="table profile-table"><thead><tr><th className="profile-table__index" onClick={() => toggleVisible(sortedSelectedProfiles, setRightSelectedIds)}>#</th>{renderSortHeader("Name", "name", rightSort, setRightSort)}{renderSortHeader("Group", "group_name", rightSort, setRightSort)}{renderSortHeader("Browser Type", "browser_type", rightSort, setRightSort)}</tr></thead><tbody>{renderProfileRows(sortedSelectedProfiles, rightSelectedIds, rightMulti)}</tbody></table>
               {selectedProfiles.length === 0 && (
                 <div className="empty-inline">No selected profiles</div>
               )}
@@ -283,4 +319,19 @@ export default function ProfilePickerDialog({
       </div>
     </div>
   );
+}
+
+function sortProfiles<T extends ProfileSummary | SelectedJobProfile>(items: T[], sort: SortState): T[] {
+  return [...items].sort((a, b) => {
+    const aValue = getSortValue(a, sort.key);
+    const bValue = getSortValue(b, sort.key);
+    const result = aValue.localeCompare(bValue, undefined, { sensitivity: "base", numeric: true });
+    return sort.direction === "asc" ? result : -result;
+  });
+}
+
+function getSortValue(profile: ProfileSummary | SelectedJobProfile, key: SortKey): string {
+  if (key === "group_name") return profile.group_name || "";
+  if (key === "browser_type") return profile.browser_type || "";
+  return profile.name || "";
 }
