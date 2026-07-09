@@ -180,6 +180,8 @@ pub fn run() {
             test_runs::commands::stop_test_run,
             test_runs::commands::stop_batch_test_run,
             run_history::commands::list_run_history,
+            run_history::commands::list_dashboard_run_history,
+            run_history::commands::list_profile_runtime_stats,
             run_history::commands::get_run_history_log,
             run_history::commands::get_run_log_tail,
             profile_manager_cmds::list_gpm_profiles,

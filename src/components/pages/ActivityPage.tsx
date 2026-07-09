@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Activity, CheckCircle2, ChevronDown, ChevronRight, Eye, RefreshCw, Search, Square } from "lucide-react";
-import { listRunHistory, listRunningTasks, stopRunningProcess, stopRunningTask } from "../../api";
-import type { RunHistoryItem, RunningTask } from "../../types";
+import { listProfileRuntimeStats, listRunHistory, listRunningTasks, stopRunningProcess, stopRunningTask } from "../../api";
+import type { ManagerKey, ProfileRuntimeRun, ProfileRuntimeStats, RunHistoryItem, RunningTask } from "../../types";
 import { useInterval } from "../../hooks/useInterval";
 import { formatDuration, formatTime } from "../../utils/format";
 import { groupHistory, type HistoryTask } from "../../utils/historyGrouping";
@@ -14,17 +14,24 @@ import StatusBadge from "../domain/StatusBadge";
 export default function ActivityPage() {
   const [tasks, setTasks] = useState<RunningTask[]>([]);
   const [history, setHistory] = useState<RunHistoryItem[]>([]);
-  const [activeTab, setActiveTab] = useState<"active" | "history">("active");
+  const [profileStats, setProfileStats] = useState<ProfileRuntimeStats[]>([]);
+  const [activeTab, setActiveTab] = useState<"active" | "history" | "profiles">("active");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState("all");
+  const [profileManager, setProfileManager] = useState<ManagerKey>("gpm");
+  const [profileQuery, setProfileQuery] = useState("");
+  const [profileGroup, setProfileGroup] = useState("all");
+  const [profileSort, setProfileSort] = useState<ProfileSortKey>("latest_run_at");
+  const [selectedProfile, setSelectedProfile] = useState<ProfileRuntimeStats | null>(null);
   const [log, setLog] = useState<{ kind: "test" | "job"; runId: string; running: boolean } | null>(null);
   const { addToast } = useToast();
 
   async function loadTasks() { try { setTasks(await listRunningTasks()); } catch { /* poll retry */ } }
   async function loadHistory() { try { setHistory(await listRunHistory()); } catch (err) { addToast({ type: "error", title: "History failed", message: String(err) }); } }
-  async function loadAll() { await Promise.all([loadTasks(), loadHistory()]); }
+  async function loadProfileStats() { try { setProfileStats(await listProfileRuntimeStats()); } catch (err) { addToast({ type: "error", title: "Profile stats failed", message: String(err) }); } }
+  async function loadAll() { await Promise.all([loadTasks(), loadHistory(), loadProfileStats()]); }
   useEffect(() => { void loadAll(); }, []);
   useInterval(() => { void loadTasks(); }, 3000);
 
@@ -36,6 +43,21 @@ export default function ActivityPage() {
     return !q || `${r.script_name} ${r.profile_name} ${r.job_name}`.toLowerCase().includes(q);
   }), [history, query, kind, status]);
   const groups = groupHistory(filtered);
+  const profileGroups = useMemo(() => {
+    const groupsForManager = profileStats
+      .filter((profile) => profile.manager === profileManager)
+      .map((profile) => profile.group_name)
+      .filter((group): group is string => Boolean(group));
+    return [...new Set(groupsForManager)].sort((a, b) => a.localeCompare(b));
+  }, [profileStats, profileManager]);
+  const filteredProfiles = useMemo(() => {
+    const q = profileQuery.trim().toLowerCase();
+    return profileStats
+      .filter((profile) => profile.manager === profileManager)
+      .filter((profile) => profileGroup === "all" || profile.group_name === profileGroup)
+      .filter((profile) => !q || [profile.profile_name, profile.profile_id, profile.group_name].filter(Boolean).join(" ").toLowerCase().includes(q))
+      .sort((a, b) => compareProfiles(a, b, profileSort));
+  }, [profileStats, profileManager, profileGroup, profileQuery, profileSort]);
 
   function toggle(id: string) {
     setExpanded((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -49,7 +71,7 @@ export default function ActivityPage() {
 
   return <div className="page activity-page">
     <div className="page__header"><h1 className="page__title"><Activity size={18} /> Activity</h1><button className="btn btn--secondary" onClick={loadAll}><RefreshCw size={14} /> Refresh</button></div>
-    <div className="tabs activity-tabs"><button className={`tab ${activeTab === "active" ? "tab--active" : ""}`} onClick={() => setActiveTab("active")}>Active Task ({tasks.length})</button><button className={`tab ${activeTab === "history" ? "tab--active" : ""}`} onClick={() => setActiveTab("history")}>History</button></div>
+    <div className="tabs activity-tabs"><button className={`tab ${activeTab === "active" ? "tab--active" : ""}`} onClick={() => setActiveTab("active")}>Active Task ({tasks.length})</button><button className={`tab ${activeTab === "history" ? "tab--active" : ""}`} onClick={() => setActiveTab("history")}>History</button><button className={`tab ${activeTab === "profiles" ? "tab--active" : ""}`} onClick={() => setActiveTab("profiles")}>Profile Stats</button></div>
     <div className="activity-content">
       {activeTab === "active" && <section className="panel activity-active-panel">
         <div className="panel__header">Active Tasks ({tasks.length})</div>
@@ -80,9 +102,43 @@ export default function ActivityPage() {
         </Fragment>;
         })}</tbody></table></div>
       </section>}
+      {activeTab === "profiles" && <section className="panel activity-profile-panel">
+        <div className="panel__header history-header"><span>Profile Stats</span><div className="page__actions history-actions"><div className="search-input history-search"><Search size={14} className="search-input__icon" /><input className="input" value={profileQuery} onChange={(e) => setProfileQuery(e.target.value)} placeholder="Search profile or group" /></div><select className="select" value={profileGroup} onChange={(e) => setProfileGroup(e.target.value)}><option value="all">All Groups</option>{profileGroups.map((group) => <option key={group} value={group}>{group}</option>)}</select><select className="select" value={profileSort} onChange={(e) => setProfileSort(e.target.value as ProfileSortKey)}><option value="latest_run_at">Latest</option><option value="profile_name">Name</option><option value="group_name">Group</option><option value="total_runs">Total</option><option value="success_runs">Success</option><option value="failed_runs">Fail</option></select></div></div>
+        <div className="panel__body profile-stats-body">
+          <div className="tabs profile-stats-manager-tabs">{managers.map((manager) => <button key={manager.key} className={`tab ${profileManager === manager.key ? "tab--active" : ""}`} onClick={() => { setProfileManager(manager.key); setProfileGroup("all"); }}>{manager.label}</button>)}</div>
+          <div className="profile-table-wrap profile-stats-table-wrap">{filteredProfiles.length === 0 ? <EmptyState title="No profile stats" description="Run scripts or jobs to collect runtime stats." /> : <table className="table profile-table profile-stats-table"><thead><tr><th className="profile-table__index">#</th><th>Profile</th><th>Group</th><th>Total</th><th>Success</th><th>Fail</th><th>Success Rate</th><th>Last Run</th></tr></thead><tbody>{filteredProfiles.map((profile, index) => <tr key={`${profile.manager}:${profile.profile_id}`} onClick={() => setSelectedProfile(profile)}><td className="profile-table__index">{index + 1}</td><td><div className="profile-stats__name">{profile.profile_name || profile.profile_id}</div><div className="history-table__muted">{profile.profile_id}</div></td><td>{profile.group_name || "-"}</td><td>{profile.total_runs}</td><td className="profile-stats__success">{profile.success_runs}</td><td className="profile-stats__fail">{profile.failed_runs}</td><td>{successRate(profile)}%</td><td>{formatTime(profile.latest_run_at || "")}</td></tr>)}</tbody></table>}</div>
+        </div>
+      </section>}
     </div>
+    {selectedProfile && <ProfileHistoryDialog profile={selectedProfile} onClose={() => setSelectedProfile(null)} onOpenLog={(run) => setLog({ kind: run.kind === "job" ? "job" : "test", runId: run.id, running: run.status === "running" })} />}
     {log && <div className="dialog-backdrop" onClick={() => setLog(null)}><div className="dialog log-dialog" onClick={(e) => e.stopPropagation()}><div className="dialog__header log-dialog__header">Log <button className="btn btn--sm btn--secondary" onClick={() => setLog(null)}>Close</button></div><div className="log-dialog__body"><LogViewer kind={log.kind} runId={log.runId} running={log.running} /></div></div></div>}
   </div>;
+}
+
+type ProfileSortKey = "latest_run_at" | "profile_name" | "group_name" | "total_runs" | "success_runs" | "failed_runs";
+
+const managers: { key: ManagerKey; label: string }[] = [
+  { key: "gpm", label: "GPM" },
+  { key: "gpmglobal", label: "GPM Global" },
+  { key: "donut", label: "Donut" },
+];
+
+function compareProfiles(a: ProfileRuntimeStats, b: ProfileRuntimeStats, key: ProfileSortKey): number {
+  if (key === "profile_name") return a.profile_name.localeCompare(b.profile_name);
+  if (key === "group_name") return (a.group_name || "").localeCompare(b.group_name || "");
+  if (key === "total_runs") return b.total_runs - a.total_runs;
+  if (key === "success_runs") return b.success_runs - a.success_runs;
+  if (key === "failed_runs") return b.failed_runs - a.failed_runs;
+  return (b.latest_run_at || "").localeCompare(a.latest_run_at || "");
+}
+
+function successRate(profile: ProfileRuntimeStats): number {
+  if (profile.total_runs === 0) return 0;
+  return Math.round((profile.success_runs / profile.total_runs) * 100);
+}
+
+function ProfileHistoryDialog({ profile, onClose, onOpenLog }: { profile: ProfileRuntimeStats; onClose: () => void; onOpenLog: (run: ProfileRuntimeRun) => void }) {
+  return <div className="dialog-backdrop" onClick={onClose}><div className="dialog profile-history-dialog" onClick={(e) => e.stopPropagation()}><div className="dialog__header profile-history-dialog__header"><div><div>{profile.profile_name || profile.profile_id}</div><div className="history-table__muted"><ManagerBadge manager={profile.manager} /> {profile.group_name || "No group"}</div></div><button className="btn btn--sm btn--secondary" onClick={onClose}>Close</button></div><div className="profile-history-dialog__body"><table className="table history-table"><thead><tr><th>Type</th><th>Script / Job</th><th>Status</th><th>Started</th><th>Duration</th><th>Result</th><th>Log</th></tr></thead><tbody>{profile.runs.map((run) => <tr key={run.id}><td>{getKindLabel(run.kind)}</td><td><div className="history-table__title">{run.job_name || run.script_name || run.script_id}</div><div className="history-table__muted">{run.kind === "job" ? run.job_id : run.script_id}</div></td><td><StatusBadge status={run.status} /></td><td>{formatTime(run.started_at)}</td><td>{formatDuration(run.started_at, run.finished_at)}</td><td>{run.error_message || (run.exit_code === null ? "-" : `Exit ${run.exit_code}`)}</td><td>{run.log_path ? <button className="btn btn--sm btn--ghost" onClick={() => onOpenLog(run)}><Eye size={12} /> Log</button> : "-"}</td></tr>)}</tbody></table></div></div></div>;
 }
 
 function getKindLabel(kind: string): string {

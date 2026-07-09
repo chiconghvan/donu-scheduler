@@ -16,7 +16,7 @@ pub async fn scheduler_tick(
     app_handle: tauri::AppHandle,
 ) {
     // Reconcile stale "running" states: verify PID is still alive
-    if let Err(e) = reconcile_running_states(&db_path) {
+    if let Err(e) = reconcile_running_states(&db_path).await {
         eprintln!("[scheduler] Error reconciling running states: {e}");
     }
 
@@ -41,7 +41,7 @@ pub async fn scheduler_tick(
     }
 }
 
-fn reconcile_running_states(db_path: &PathBuf) -> Result<(), String> {
+async fn reconcile_running_states(db_path: &PathBuf) -> Result<(), String> {
     let running_states = crate::jobs::repository::get_all_running_profile_states(db_path)?;
 
     for state in running_states {
@@ -74,6 +74,15 @@ fn reconcile_running_states(db_path: &PathBuf) -> Result<(), String> {
 
         if !alive {
             let now = crate::models::now_iso();
+            if let Ok((profile_id, manager)) =
+                crate::jobs::repository::get_job_run_profile_manager(db_path, &run_id)
+            {
+                if let Err(e) = close_profile(db_path, &manager, &profile_id).await {
+                    eprintln!(
+                        "[scheduler] Failed to close profile {profile_id} via {manager}: {e}"
+                    );
+                }
+            }
             // Mark run as failed
             let _ = crate::jobs::repository::update_job_run(
                 db_path,
@@ -103,6 +112,34 @@ fn reconcile_running_states(db_path: &PathBuf) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+async fn close_profile(db_path: &PathBuf, manager: &str, profile_id: &str) -> Result<(), String> {
+    let conn = crate::db::open_db(db_path).map_err(|e| e.to_string())?;
+    match manager {
+        "gpm" => {
+            let base_url = crate::db::get_setting(&conn, "gpmlogin_api_base_url")
+                .unwrap_or_else(|_| "http://127.0.0.1:19995".to_string());
+            crate::profile_manager::gpmlogin_client::GpmLoginClient::new(base_url)
+                .close_profile(profile_id)
+                .await
+        }
+        "gpmglobal" => {
+            let base_url = crate::db::get_setting(&conn, "gpmglobal_api_base_url")
+                .unwrap_or_else(|_| "http://127.0.0.1:9495".to_string());
+            crate::profile_manager::gpmglobal_client::GpmGlobalClient::new(base_url)
+                .close_profile(profile_id)
+                .await
+        }
+        "donut" => {
+            let base_url = crate::db::get_setting(&conn, "donutbrowser_api_base_url")
+                .unwrap_or_else(|_| "http://127.0.0.1:10108".to_string());
+            crate::profile_manager::donutbrowser_client::DonutBrowserClient::new(base_url)
+                .close_profile(profile_id)
+                .await
+        }
+        _ => Err(format!("Unsupported manager: {manager}")),
+    }
 }
 
 async fn process_job(
@@ -152,7 +189,7 @@ async fn process_job(
             continue;
         }
 
-        if state.status == "running" && state.current_run_id.is_some() {
+        if matches!(state.status.as_str(), "queued" | "running") && state.current_run_id.is_some() {
             continue;
         }
 
@@ -195,7 +232,7 @@ async fn process_job(
             continue;
         }
 
-        // Create a fake run
+        // Queue run first; it becomes running only after acquiring runtime permit.
         let run_id = crate::models::new_id();
         let now_str = crate::models::now_iso();
         let script_path = job.script_path_for_run(db_path).unwrap_or_default();
@@ -214,13 +251,14 @@ async fn process_job(
             job_id: Some(job.id.clone()),
             profile_id: profile.id.clone(),
             script_id: job.script_id.clone(),
-            status: "running".to_string(),
+            status: "queued".to_string(),
             started_at: now_str.clone(),
             finished_at: None,
             exit_code: None,
             pid: None,
             log_path: Some(log_path.clone()),
             error_message: None,
+            manager: profile.manager.clone(),
             profile_name,
             group_name,
             created_at: now_str.clone(),
@@ -228,14 +266,13 @@ async fn process_job(
 
         crate::jobs::repository::insert_job_run(db_path, &run)?;
 
-        // Update state to running
         crate::jobs::repository::update_job_profile_state(
             db_path,
             &state.id,
             state.run_count,
             state.success_count,
             state.failed_count,
-            "running",
+            "queued",
             Some(&next_run.format("%Y-%m-%dT%H:%M:%S").to_string()),
             &now_str,
             Some(&run_id),
@@ -261,6 +298,30 @@ async fn process_job(
 
         tokio::spawn(async move {
             let _permit = runtime_limiter.acquire().await;
+
+            if crate::jobs::repository::get_job_run_status(&db_path_clone, &run_id_clone)
+                .map(|s| s == "stopped")
+                .unwrap_or(false)
+            {
+                return;
+            }
+
+            let _ = crate::jobs::repository::update_job_run_status(
+                &db_path_clone,
+                &run_id_clone,
+                "running",
+            );
+            let _ = crate::jobs::repository::update_job_profile_state(
+                &db_path_clone,
+                &state_id,
+                current_run_count,
+                current_success_count,
+                current_failed_count,
+                "running",
+                None,
+                &crate::models::now_iso(),
+                Some(&run_id_clone),
+            );
 
             let result = match build_runner_request_for_job(
                 &db_path_clone,

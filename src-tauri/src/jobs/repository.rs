@@ -290,7 +290,7 @@ pub fn get_latest_job_profile_state(
 pub fn list_job_runs(db_path: &PathBuf, job_id: &str) -> Result<Vec<JobRun>, String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT jr.id, jr.job_id, jr.profile_id, jr.script_id, jr.status, jr.started_at, jr.finished_at, jr.exit_code, jr.pid, jr.log_path, jr.error_message, COALESCE(NULLIF(jr.profile_name, ''), pc.profile_name, jr.profile_id), COALESCE(jr.group_name, pc.group_name), jr.created_at FROM job_runs jr LEFT JOIN profile_cache pc ON pc.profile_id = jr.profile_id AND pc.manager = (SELECT manager FROM profile_cache WHERE profile_id = jr.profile_id ORDER BY updated_at DESC LIMIT 1) WHERE jr.job_id=?1 ORDER BY jr.created_at DESC LIMIT 100")
+        .prepare("SELECT jr.id, jr.job_id, jr.profile_id, jr.script_id, jr.status, jr.started_at, jr.finished_at, jr.exit_code, jr.pid, jr.log_path, jr.error_message, COALESCE(NULLIF(jr.manager, ''), pc.manager, 'donut'), COALESCE(NULLIF(jr.profile_name, ''), pc.profile_name, jr.profile_id), COALESCE(jr.group_name, pc.group_name), jr.created_at FROM job_runs jr LEFT JOIN profile_cache pc ON pc.profile_id = jr.profile_id AND pc.manager = jr.manager WHERE jr.job_id=?1 ORDER BY jr.created_at DESC LIMIT 100")
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
@@ -307,9 +307,10 @@ pub fn list_job_runs(db_path: &PathBuf, job_id: &str) -> Result<Vec<JobRun>, Str
                 pid: row.get(8)?,
                 log_path: row.get(9)?,
                 error_message: row.get(10)?,
-                profile_name: row.get(11)?,
-                group_name: row.get(12)?,
-                created_at: row.get(13)?,
+                manager: row.get(11)?,
+                profile_name: row.get(12)?,
+                group_name: row.get(13)?,
+                created_at: row.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -324,8 +325,8 @@ pub fn list_job_runs(db_path: &PathBuf, job_id: &str) -> Result<Vec<JobRun>, Str
 pub fn insert_job_run(db_path: &PathBuf, run: &JobRun) -> Result<(), String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT INTO job_runs (id, job_id, profile_id, script_id, status, started_at, finished_at, exit_code, pid, log_path, error_message, profile_name, group_name, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)",
-        params![run.id, run.job_id, run.profile_id, run.script_id, run.status, run.started_at, run.finished_at, run.exit_code, run.pid, run.log_path, run.error_message, run.profile_name, run.group_name, run.created_at],
+        "INSERT INTO job_runs (id, job_id, profile_id, script_id, status, started_at, finished_at, exit_code, pid, log_path, error_message, manager, profile_name, group_name, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)",
+        params![run.id, run.job_id, run.profile_id, run.script_id, run.status, run.started_at, run.finished_at, run.exit_code, run.pid, run.log_path, run.error_message, run.manager, run.profile_name, run.group_name, run.created_at],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -343,6 +344,16 @@ pub fn update_job_run(
     conn.execute(
         "UPDATE job_runs SET status=?1, finished_at=?2, exit_code=?3, error_message=?4 WHERE id=?5",
         params![status, finished_at, exit_code, error_message, run_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn update_job_run_status(db_path: &PathBuf, run_id: &str, status: &str) -> Result<(), String> {
+    let conn = open_db(db_path).map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE job_runs SET status=?1 WHERE id=?2",
+        params![status, run_id],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -378,14 +389,38 @@ pub fn get_job_run_status(db_path: &PathBuf, run_id: &str) -> Result<String, Str
     .map_err(|e| e.to_string())
 }
 
-pub fn get_job_run_profile(db_path: &PathBuf, run_id: &str) -> Result<String, String> {
+pub fn get_job_run_profile_manager(
+    db_path: &PathBuf,
+    run_id: &str,
+) -> Result<(String, String), String> {
     let conn = open_db(db_path).map_err(|e| e.to_string())?;
-    conn.query_row(
-        "SELECT profile_id FROM job_runs WHERE id=?1",
-        params![run_id],
-        |row| row.get(0),
-    )
-    .map_err(|e| e.to_string())
+    let (profile_id, profile_ids_json): (String, Option<String>) = conn
+        .query_row(
+            "SELECT jr.profile_id, j.profile_ids_json FROM job_runs jr LEFT JOIN jobs j ON j.id = jr.job_id WHERE jr.id=?1",
+            params![run_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| e.to_string())?;
+
+    if let Some(profile_ids_json) = profile_ids_json {
+        let profiles: Vec<JobProfileRef> = serde_json::from_str(&profile_ids_json)
+            .map_err(|e| format!("Invalid profile_ids_json: {e}"))?;
+        if let Some(profile) = profiles
+            .into_iter()
+            .find(|profile| profile.id == profile_id)
+        {
+            return Ok((profile_id, profile.manager));
+        }
+    }
+
+    let manager = conn
+        .query_row(
+            "SELECT manager FROM profile_cache WHERE profile_id=?1 ORDER BY updated_at DESC LIMIT 1",
+            params![profile_id],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "donut".to_string());
+    Ok((profile_id, manager))
 }
 
 pub fn get_all_running_profile_states(db_path: &PathBuf) -> Result<Vec<JobProfileState>, String> {

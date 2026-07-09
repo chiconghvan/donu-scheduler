@@ -180,6 +180,30 @@
   flex-shrink: 0;
 }
 
+.profile-history-dialog {
+  width: min(980px, 94vw);
+  height: min(620px, 84vh);
+  max-width: 94vw;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.profile-history-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.profile-history-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

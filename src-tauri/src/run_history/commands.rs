@@ -1,5 +1,5 @@
 use crate::db::AppState;
-use crate::models::RunHistoryItem;
+use crate::models::{ProfileRuntimeStats, RunHistoryItem};
 use crate::run_logs::LogEntry;
 use std::sync::Arc;
 
@@ -9,6 +9,22 @@ pub fn list_run_history(
 ) -> Result<Vec<RunHistoryItem>, String> {
     let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
     crate::run_history::repository::list_run_history(&db_path)
+}
+
+#[tauri::command]
+pub fn list_dashboard_run_history(
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<Vec<RunHistoryItem>, String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    crate::run_history::repository::list_dashboard_run_history(&db_path)
+}
+
+#[tauri::command]
+pub fn list_profile_runtime_stats(
+    state: tauri::State<'_, Arc<AppState>>,
+) -> Result<Vec<ProfileRuntimeStats>, String> {
+    let db_path = state.db_path.lock().map_err(|e| e.to_string())?;
+    crate::run_history::repository::list_profile_runtime_stats(&db_path)
 }
 
 #[tauri::command]

@@ -9,7 +9,8 @@
 }
 
 .activity-active-panel,
-.activity-history-panel {
+.activity-history-panel,
+.activity-profile-panel {
   height: 100%;
   min-height: 0;
   min-width: 0;
@@ -25,6 +26,11 @@
   overflow: auto;
 }
 
+.activity-profile-panel .panel__body {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .activity-active-panel .panel__body {
   flex: 1;
 }
@@ -32,4 +38,39 @@
 .activity-active-panel .empty-state {
   min-height: 0;
   padding: var(--space-4);
+}
+
+.profile-stats-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+}
+
+.profile-stats-manager-tabs {
+  flex-shrink: 0;
+}
+
+.profile-stats-table-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.profile-stats-table th,
+.profile-stats-table td {
+  white-space: nowrap;
+}
+
+.profile-stats__name {
+  font-weight: 650;
+}
+
+.profile-stats__success {
+  color: var(--accent-green);
+  font-weight: 650;
+}
+
+.profile-stats__fail {
+  color: var(--accent-red);
+  font-weight: 650;
 }

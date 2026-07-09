@@ -13,6 +13,7 @@ import type {
   RunningTask,
   InputCache,
   RunHistoryItem,
+  ProfileRuntimeStats,
   LogEntry,
   RuntimeStatus,
   ScriptStoreCatalog,
@@ -184,6 +185,14 @@ export async function listTestRuns(): Promise<TestRun[]> {
 
 export async function listRunHistory(): Promise<RunHistoryItem[]> {
   return invoke("list_run_history");
+}
+
+export async function listDashboardRunHistory(): Promise<RunHistoryItem[]> {
+  return invoke("list_dashboard_run_history");
+}
+
+export async function listProfileRuntimeStats(): Promise<ProfileRuntimeStats[]> {
+  return invoke("list_profile_runtime_stats");
 }
 
 export async function getTestRunLog(runId: string): Promise<string> {

@@ -106,8 +106,12 @@ pub fn delete_script(db_path: &PathBuf, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn refresh_script_defaults_if_needed(conn: &rusqlite::Connection, script: &Script) -> Result<Script, String> {
-    let refreshed = read_default_inputs_from_path(&script.script_path).unwrap_or_else(|_| script.default_inputs_json.clone());
+fn refresh_script_defaults_if_needed(
+    conn: &rusqlite::Connection,
+    script: &Script,
+) -> Result<Script, String> {
+    let refreshed = read_default_inputs_from_path(&script.script_path)
+        .unwrap_or_else(|_| script.default_inputs_json.clone());
     if refreshed != script.default_inputs_json {
         let now = now_iso();
         conn.execute(
@@ -145,7 +149,9 @@ fn read_default_inputs_from_path(path: &str) -> Result<String, String> {
                             if allow {
                                 let get_val = |key: &str| {
                                     raw.iter()
-                                        .find(|item| item.get("Key").and_then(|v| v.as_str()) == Some(key))
+                                        .find(|item| {
+                                            item.get("Key").and_then(|v| v.as_str()) == Some(key)
+                                        })
                                         .and_then(|item| item.get("Value"))
                                         .and_then(|v| v.as_str())
                                         .unwrap_or("")

@@ -81,7 +81,8 @@ pub async fn stop_job_run(
         lock.clone()
     };
 
-    let profile_id = crate::jobs::repository::get_job_run_profile(&db_path, &run_id)?;
+    let (profile_id, manager) =
+        crate::jobs::repository::get_job_run_profile_manager(&db_path, &run_id)?;
 
     // Try in-memory registry first, then fall back to DB
     let pid = {
@@ -102,7 +103,7 @@ pub async fn stop_job_run(
     }
 
     kill_process_by_pid(pid)?;
-    let close_result = close_profile(&db_path, "donut", &profile_id).await;
+    let close_result = close_profile(&db_path, &manager, &profile_id).await;
 
     if let Ok(mut registry) = state.process_registry.lock() {
         registry.remove(&run_id);

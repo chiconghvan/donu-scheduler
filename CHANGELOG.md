@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.0] - 2026-07-09
+
+### Added
+- Add Activity profile stats with manager, group, success, failure, and per-profile run history views
+- Add full dashboard run history loading for today success metrics
+
+### Changed
+- Track job run manager metadata so history, active tasks, and stop actions use the correct profile provider
+- Queue scheduled job runs before runtime permit acquisition and show queued jobs in active tasks
+
+### Fixed
+- Close profiles with their original manager when stopping jobs or reconciling stale running states
+
 ## [v0.7.12] - 2026-07-08
 
 ### Added
@@ -255,7 +268,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.12...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.0...HEAD
+[v0.8.0]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.12...v0.8.0
 [v0.7.12]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.11...v0.7.12
 [v0.7.11]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.10...v0.7.11
 [v0.7.10]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.9...v0.7.10

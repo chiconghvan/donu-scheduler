@@ -148,6 +148,7 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
             exit_code INTEGER,
             log_path TEXT,
             error_message TEXT,
+            manager TEXT NOT NULL DEFAULT 'donut',
             created_at TEXT NOT NULL,
             FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
             FOREIGN KEY(script_id) REFERENCES scripts(id) ON DELETE CASCADE
@@ -240,7 +241,10 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
         .and_then(|mut stmt| {
             stmt.query_map([], |row| row.get::<_, String>(1))
                 .ok()
-                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "default_inputs_json"))
+                .map(|cols| {
+                    cols.filter_map(|c| c.ok())
+                        .any(|c| c == "default_inputs_json")
+                })
         })
         .unwrap_or(false);
 
@@ -355,6 +359,22 @@ pub fn init_db(conn: &Connection) -> SqlResult<()> {
 
     if !has_job_group_name_col {
         conn.execute_batch("ALTER TABLE job_runs ADD COLUMN group_name TEXT;")?;
+    }
+
+    let has_job_manager_col: bool = conn
+        .prepare("PRAGMA table_info(job_runs)")
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| row.get::<_, String>(1))
+                .ok()
+                .map(|cols| cols.filter_map(|c| c.ok()).any(|c| c == "manager"))
+        })
+        .unwrap_or(false);
+
+    if !has_job_manager_col {
+        conn.execute_batch(
+            "ALTER TABLE job_runs ADD COLUMN manager TEXT NOT NULL DEFAULT 'donut';",
+        )?;
     }
 
     conn.execute_batch(

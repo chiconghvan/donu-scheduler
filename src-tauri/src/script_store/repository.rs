@@ -416,7 +416,9 @@ pub fn apply_pending_updates() -> Result<Vec<ScriptStoreUpdateApplied>, String> 
             })
         })
         .map_err(|e| e.to_string())?;
-    let records = rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())?;
+    let records = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
     drop(stmt);
 
     let mut applied = Vec::new();

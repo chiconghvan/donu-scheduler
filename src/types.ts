@@ -127,9 +127,43 @@ export interface JobRun {
   pid: number | null;
   log_path: string | null;
   error_message: string | null;
+  manager: string;
   profile_name: string;
   group_name: string | null;
   created_at: string;
+}
+
+export interface ProfileRuntimeRun {
+  id: string;
+  kind: string;
+  job_id: string | null;
+  job_name: string | null;
+  script_id: string;
+  script_name: string | null;
+  profile_id: string;
+  profile_name: string;
+  group_name: string | null;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  exit_code: number | null;
+  error_message: string | null;
+  log_path: string | null;
+  manager: string;
+  created_at: string;
+}
+
+export interface ProfileRuntimeStats {
+  profile_id: string;
+  profile_name: string;
+  group_name: string | null;
+  manager: string;
+  total_runs: number;
+  success_runs: number;
+  failed_runs: number;
+  stopped_runs: number;
+  latest_run_at: string | null;
+  runs: ProfileRuntimeRun[];
 }
 
 export interface TestRun {

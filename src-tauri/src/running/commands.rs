@@ -192,7 +192,7 @@ fn list_job_tasks(db_path: &PathBuf) -> Result<Vec<RunningTask>, String> {
          LEFT JOIN scripts s ON s.id = j.script_id
          LEFT JOIN job_runs jr ON jr.id = st.current_run_id
          LEFT JOIN profile_cache pc ON pc.profile_id = st.profile_id AND pc.manager = (SELECT manager FROM profile_cache WHERE profile_id = st.profile_id ORDER BY updated_at DESC LIMIT 1)
-         WHERE j.enabled = 1 AND st.date = ?1 AND st.status IN ('running','pending','scheduled')
+         WHERE j.enabled = 1 AND st.date = ?1 AND st.status IN ('queued','running','pending','scheduled')
          ORDER BY j.created_at DESC, st.profile_id",
     ).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -365,13 +365,14 @@ async fn stop_job_run(
     state: &Arc<AppState>,
     run_id: &str,
 ) -> Result<(), String> {
-    let profile_id = crate::jobs::repository::get_job_run_profile(db_path, run_id)?;
+    let (profile_id, manager) =
+        crate::jobs::repository::get_job_run_profile_manager(db_path, run_id)?;
     if let Some(pid) = get_pid(state, db_path, run_id, false)? {
         if crate::runner::is_process_alive(pid) {
             let _ = kill_process_by_pid(pid);
         }
     }
-    let _ = close_profile(db_path, "donut", &profile_id).await;
+    let _ = close_profile(db_path, &manager, &profile_id).await;
     if let Ok(mut registry) = state.process_registry.lock() {
         registry.remove(run_id);
     }

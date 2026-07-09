@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, CalendarClock, CheckCircle, Clock, FileCode, Gauge, PlayCircle, RefreshCw } from "lucide-react";
-import { listJobs, listRunHistory, listRunningTasks, listScripts } from "../../api";
+import { listDashboardRunHistory, listJobs, listRunningTasks, listScripts } from "../../api";
 import type { JobDefinition, RunHistoryItem, RunningTask, Script } from "../../types";
 import { calculateSuccessRate, formatTime } from "../../utils/format";
 import { getScheduleLabel, getUpcomingTime, parseProfilesCount } from "../../utils/schedule";
@@ -27,7 +27,7 @@ export default function DashboardPage({ onNavigate }: Props) {
         listScripts(),
         listJobs(),
         listRunningTasks(),
-        listRunHistory(),
+        listDashboardRunHistory(),
       ]);
       setScripts(scriptsRes);
       setJobs(jobsRes);
@@ -49,8 +49,10 @@ export default function DashboardPage({ onNavigate }: Props) {
   const activeProfiles = running.reduce((sum, task) => sum + task.running_count, 0);
   const queuedProfiles = running.reduce((sum, task) => sum + task.queued_count + task.scheduled_count, 0);
   const failedRuns = history.filter((run) => run.status === "failed").length;
-  const stoppedRuns = history.filter((run) => run.status === "stopped").length;
-  const successRate = calculateSuccessRate(history);
+  const todayKey = formatLocalDateKey(new Date());
+  const todayRuns = history.filter((run) => run.started_at.startsWith(todayKey));
+  const todaySuccessRuns = todayRuns.filter((run) => run.status === "success").length;
+  const todaySuccessRate = calculateSuccessRate(todayRuns);
   const lastRun = history[0];
   const enabledJobList = useMemo(() => jobs.filter((j) => j.enabled === 1), [jobs]);
   const healthState = running.length > 0 ? "running" : failedRuns > 0 ? "attention" : "idle";
@@ -77,7 +79,8 @@ export default function DashboardPage({ onNavigate }: Props) {
           <p>{running.length > 0 ? `${running.length} task group(s), ${activeProfiles} profile(s) executing now.` : lastRun ? `Last process started at ${formatTime(lastRun.started_at)}.` : "No run history yet."}</p>
         </div>
         <div className="dashboard-hero__stats">
-          <div><span>{successRate}%</span><small>Success</small></div>
+          <div><span>{todaySuccessRate}%</span><small>Today success rate</small></div>
+          <div><span>{todaySuccessRuns}/{todayRuns.length}</span><small>Today success/processes</small></div>
           <div><span>{activeProfiles}</span><small>Running profiles</small></div>
           <div><span>{enabledJobs}</span><small>Enabled jobs</small></div>
         </div>
@@ -106,7 +109,7 @@ export default function DashboardPage({ onNavigate }: Props) {
               <Metric icon={<FileCode size={18} />} value={scripts.length} label="Scripts installed" meta="Script Store" onClick={() => onNavigate("store")} />
               <Metric icon={<CalendarClock size={18} />} value={`${enabledJobs}/${jobs.length}`} label="Jobs enabled" meta={`${disabledJobs} disabled`} onClick={() => onNavigate("jobs")} />
               <Metric icon={<Activity size={18} />} value={running.length} label="Active task groups" meta={`${queuedProfiles} queued/scheduled`} onClick={() => onNavigate("activity")} />
-              <Metric icon={<CheckCircle size={18} />} value={`${successRate}%`} label="Run health" meta={`${failedRuns} failed, ${stoppedRuns} stopped`} onClick={() => onNavigate("activity")} />
+              <Metric icon={<CheckCircle size={18} />} value={`${todaySuccessRate}%`} label="Run health" meta={`${todaySuccessRuns}/${todayRuns.length} success today`} onClick={() => onNavigate("activity")} />
             </div>
           </div>
 
@@ -122,6 +125,13 @@ export default function DashboardPage({ onNavigate }: Props) {
       )}
     </div>
   );
+}
+
+function formatLocalDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function Metric({ icon, value, label, meta, onClick }: { icon: React.ReactNode; value: React.ReactNode; label: string; meta: string; onClick: () => void }) {

@@ -85,9 +85,45 @@ pub struct JobRun {
     pub pid: Option<u32>,
     pub log_path: Option<String>,
     pub error_message: Option<String>,
+    pub manager: String,
     pub profile_name: String,
     pub group_name: Option<String>,
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileRuntimeRun {
+    pub id: String,
+    pub kind: String,
+    pub job_id: Option<String>,
+    pub job_name: Option<String>,
+    pub script_id: String,
+    pub script_name: Option<String>,
+    pub profile_id: String,
+    pub profile_name: String,
+    pub group_name: Option<String>,
+    pub status: String,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub exit_code: Option<i32>,
+    pub error_message: Option<String>,
+    pub log_path: Option<String>,
+    pub manager: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileRuntimeStats {
+    pub profile_id: String,
+    pub profile_name: String,
+    pub group_name: Option<String>,
+    pub manager: String,
+    pub total_runs: i32,
+    pub success_runs: i32,
+    pub failed_runs: i32,
+    pub stopped_runs: i32,
+    pub latest_run_at: Option<String>,
+    pub runs: Vec<ProfileRuntimeRun>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
