@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.1] - 2026-07-09
+
+### Fixed
+- Verify profiles against their selected manager before launching scheduled jobs or manual test runs
+- Skip deleted or missing profiles instead of passing stale profile IDs to the runtime
+
 ## [v0.8.0] - 2026-07-09
 
 ### Added
@@ -268,7 +274,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.1...HEAD
+[v0.8.1]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.0...v0.8.1
 [v0.8.0]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.12...v0.8.0
 [v0.7.12]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.11...v0.7.12
 [v0.7.11]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.10...v0.7.11

@@ -1,5 +1,8 @@
 use crate::db::AppState;
 use crate::models::*;
+use crate::profile_manager::donutbrowser_client::DonutBrowserClient;
+use crate::profile_manager::gpmglobal_client::GpmGlobalClient;
+use crate::profile_manager::gpmlogin_client::GpmLoginClient;
 use crate::runner::{self, RunnerRequest};
 use rusqlite::params;
 use std::path::PathBuf;
@@ -40,6 +43,13 @@ pub async fn run_script_test(
         };
         (runtime_path, api_url)
     };
+
+    if !verify_profile_exists(&manager, &api_url, &profile_id).await? {
+        return Err(format!(
+            "Profile not found or deleted: {} ({})",
+            profile_id, manager
+        ));
+    }
 
     let now = now_iso();
     let run_id = new_id();
@@ -204,6 +214,14 @@ pub async fn run_batch_test(
     let mut runs = Vec::new();
 
     for profile_id in &profile_ids {
+        if !verify_profile_exists(&manager, &api_url, profile_id).await? {
+            eprintln!(
+                "[test_runs] Skipping missing profile {} via {}",
+                profile_id, manager
+            );
+            continue;
+        }
+
         let snapshot = profile_snapshots
             .iter()
             .find(|p| p.profile_id == *profile_id)
@@ -336,7 +354,36 @@ pub async fn run_batch_test(
         runs.push(test_run);
     }
 
+    if runs.is_empty() {
+        return Err("No existing profiles to run".to_string());
+    }
+
     Ok(runs)
+}
+
+async fn verify_profile_exists(
+    manager: &str,
+    api_url: &str,
+    profile_id: &str,
+) -> Result<bool, String> {
+    match manager {
+        "gpm" => {
+            GpmLoginClient::new(api_url.to_string())
+                .profile_exists(profile_id)
+                .await
+        }
+        "gpmglobal" => {
+            GpmGlobalClient::new(api_url.to_string())
+                .profile_exists(profile_id)
+                .await
+        }
+        "donut" => {
+            DonutBrowserClient::new(api_url.to_string())
+                .profile_exists(profile_id)
+                .await
+        }
+        other => Err(format!("Unsupported manager: {other}")),
+    }
 }
 
 #[tauri::command]

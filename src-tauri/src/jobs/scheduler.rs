@@ -1,5 +1,8 @@
 use crate::db::RuntimeLimiter;
 use crate::models::{JobDefinition, JobProfileRef, JobProfileState, JobRun, ScheduleConfig};
+use crate::profile_manager::donutbrowser_client::DonutBrowserClient;
+use crate::profile_manager::gpmglobal_client::GpmGlobalClient;
+use crate::profile_manager::gpmlogin_client::GpmLoginClient;
 use crate::runner;
 use crate::runner::RunnerRequest;
 use chrono::{Duration, NaiveDateTime, NaiveTime};
@@ -230,6 +233,36 @@ async fn process_job(
                 )?;
             }
             continue;
+        }
+
+        match verify_profile_exists(db_path, profile).await {
+            Ok(true) => {}
+            Ok(false) => {
+                let now_str = crate::models::now_iso();
+                eprintln!(
+                    "[scheduler] Skipping missing profile {} via {}",
+                    profile.id, profile.manager
+                );
+                crate::jobs::repository::update_job_profile_state(
+                    db_path,
+                    &state.id,
+                    state.run_count,
+                    state.success_count,
+                    state.failed_count,
+                    "expired",
+                    None,
+                    &now_str,
+                    None,
+                )?;
+                continue;
+            }
+            Err(e) => {
+                eprintln!(
+                    "[scheduler] Profile verify failed for {} via {}: {}",
+                    profile.id, profile.manager, e
+                );
+                continue;
+            }
         }
 
         // Queue run first; it becomes running only after acquiring runtime permit.
@@ -604,6 +637,43 @@ fn default_api_url_for_manager(manager: &str) -> String {
     }
 }
 
+fn api_url_for_manager(db_path: &PathBuf, manager: &str) -> String {
+    let setting_key = match manager {
+        "gpm" => "gpmlogin_api_base_url",
+        "gpmglobal" => "gpmglobal_api_base_url",
+        _ => "donutbrowser_api_base_url",
+    };
+
+    if let Ok(conn) = crate::db::open_db(db_path) {
+        crate::db::get_setting(&conn, setting_key)
+            .unwrap_or_else(|_| default_api_url_for_manager(manager))
+    } else {
+        default_api_url_for_manager(manager)
+    }
+}
+
+async fn verify_profile_exists(db_path: &PathBuf, profile: &JobProfileRef) -> Result<bool, String> {
+    let api_url = api_url_for_manager(db_path, &profile.manager);
+    match profile.manager.as_str() {
+        "gpm" => {
+            GpmLoginClient::new(api_url)
+                .profile_exists(&profile.id)
+                .await
+        }
+        "gpmglobal" => {
+            GpmGlobalClient::new(api_url)
+                .profile_exists(&profile.id)
+                .await
+        }
+        "donut" => {
+            DonutBrowserClient::new(api_url)
+                .profile_exists(&profile.id)
+                .await
+        }
+        other => Err(format!("Unsupported manager: {other}")),
+    }
+}
+
 fn build_runner_request_for_job(
     db_path: &PathBuf,
     job_id: &str,
@@ -613,21 +683,8 @@ fn build_runner_request_for_job(
     let job = crate::jobs::repository::get_job(db_path, job_id)?;
     let script_path = job.script_path_for_run(db_path).unwrap_or_default();
     let cli_args = build_cli_args(&job.default_inputs_json, &job.cli_args);
-    let (runtime_path, api_url) = if let Ok(conn) = crate::db::open_db(db_path) {
-        let setting_key = match profile.manager.as_str() {
-            "gpm" => "gpmlogin_api_base_url",
-            "gpmglobal" => "gpmglobal_api_base_url",
-            _ => "donutbrowser_api_base_url",
-        };
-        let api = crate::db::get_setting(&conn, setting_key)
-            .unwrap_or_else(|_| default_api_url_for_manager(&profile.manager));
-        (crate::runtime_manager::runtime_exe_path_string(), api)
-    } else {
-        (
-            crate::runtime_manager::runtime_exe_path_string(),
-            default_api_url_for_manager(&profile.manager),
-        )
-    };
+    let runtime_path = crate::runtime_manager::runtime_exe_path_string();
+    let api_url = api_url_for_manager(db_path, &profile.manager);
 
     Ok(RunnerRequest {
         script_path,

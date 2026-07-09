@@ -109,6 +109,46 @@ impl GpmLoginClient {
         Ok(all_profiles)
     }
 
+    /// Verify a GPMLogin profile exists.
+    /// GET {base_url}/api/v3/profile/{id}
+    pub async fn profile_exists(&self, profile_id: &str) -> Result<bool, String> {
+        let urls = [
+            format!("{}/api/v3/profile/{}", self.base_url, profile_id),
+            format!("{}/api/v3/profiles/{}", self.base_url, profile_id),
+        ];
+
+        let mut saw_not_found = false;
+        for url in urls {
+            let resp = reqwest::get(&url)
+                .await
+                .map_err(|e| format!("GPM profile verify request failed: {e}"))?;
+
+            if resp.status() == reqwest::StatusCode::NOT_FOUND {
+                saw_not_found = true;
+                continue;
+            }
+            if !resp.status().is_success() {
+                return Err(format!(
+                    "GPM profile verify returned status: {}",
+                    resp.status()
+                ));
+            }
+
+            let body: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|e| format!("GPM profile verify parse error: {e}"))?;
+            return Ok(body["success"].as_bool().unwrap_or(false)
+                && body["data"]["id"].as_str() == Some(profile_id));
+        }
+
+        if saw_not_found {
+            Ok(false)
+        } else {
+            Err("GPM profile verify failed".to_string())
+        }
+    }
+
     /// Close a running GPM profile.
     /// GET {base_url}/api/v3/profiles/close/{id}
     pub async fn close_profile(&self, profile_id: &str) -> Result<(), String> {

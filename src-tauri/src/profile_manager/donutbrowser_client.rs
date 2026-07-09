@@ -99,6 +99,31 @@ impl DonutBrowserClient {
         Ok(profiles)
     }
 
+    /// Verify a Donut Browser profile exists.
+    /// GET {base_url}/v1/profiles/{id}
+    pub async fn profile_exists(&self, profile_id: &str) -> Result<bool, String> {
+        let url = format!("{}/v1/profiles/{}", self.base_url, profile_id);
+        let resp = reqwest::get(&url)
+            .await
+            .map_err(|e| format!("Donut Browser profile verify request failed: {e}"))?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(false);
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "Donut Browser profile verify returned status: {}",
+                resp.status()
+            ));
+        }
+
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("Donut Browser profile verify parse error: {e}"))?;
+        Ok(body["profile"]["id"].as_str() == Some(profile_id))
+    }
+
     /// Kill a running Donut Browser profile.
     /// POST {base_url}/v1/profiles/{id}/kill
     pub async fn close_profile(&self, profile_id: &str) -> Result<(), String> {

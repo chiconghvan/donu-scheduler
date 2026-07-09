@@ -122,6 +122,32 @@ impl GpmGlobalClient {
         Ok(all_profiles)
     }
 
+    /// Verify a GPMGlobal profile exists.
+    /// GET {base_url}/api/v1/profiles/{id}
+    pub async fn profile_exists(&self, profile_id: &str) -> Result<bool, String> {
+        let url = format!("{}/api/v1/profiles/{}", self.base_url, profile_id);
+        let resp = reqwest::get(&url)
+            .await
+            .map_err(|e| format!("GPMGlobal profile verify request failed: {e}"))?;
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(false);
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "GPMGlobal profile verify returned status: {}",
+                resp.status()
+            ));
+        }
+
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("GPMGlobal profile verify parse error: {e}"))?;
+        Ok(body["success"].as_bool().unwrap_or(false)
+            && body["data"]["id"].as_str() == Some(profile_id))
+    }
+
     pub async fn close_profile(&self, profile_id: &str) -> Result<(), String> {
         let url = format!("{}/api/v1/profiles/stop/{}", self.base_url, profile_id);
         let resp = reqwest::get(&url)
