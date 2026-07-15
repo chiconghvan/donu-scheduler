@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.3] - 2026-07-15
+
+### Fixed
+- Spread first `window_count` schedule run randomly within the window instead of spawning immediately at start time
+
 ## [v0.8.2] - 2026-07-15
 
 ### Fixed
@@ -279,7 +284,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Profile manager integration with GPMLogin and Donut Browser
 - Runtime runner with fake/real process dispatch
 
-[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.3...HEAD
+[v0.8.3]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.2...v0.8.3
 [v0.8.2]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.1...v0.8.2
 [v0.8.1]: https://github.com/chiconghvan/DonuScheduler/compare/v0.8.0...v0.8.1
 [v0.8.0]: https://github.com/chiconghvan/DonuScheduler/compare/v0.7.12...v0.8.0

@@ -506,10 +506,6 @@ fn next_window_count(
     if let Some(next_run_at) = state.next_run_at.as_deref().and_then(parse_dt) {
         return Ok(Some(next_run_at));
     }
-    if state.last_run_at.is_none() {
-        return Ok(Some(now));
-    }
-
     Ok(crate::models::compute_next_run(
         target,
         state.success_count,
