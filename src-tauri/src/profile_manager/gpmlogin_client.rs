@@ -134,18 +134,23 @@ impl GpmLoginClient {
                 ));
             }
 
-            let body: serde_json::Value = resp
-                .json()
+            let text = resp
+                .text()
                 .await
-                .map_err(|e| format!("GPM profile verify parse error: {e}"))?;
-            return Ok(body["success"].as_bool().unwrap_or(false)
-                && body["data"]["id"].as_str() == Some(profile_id));
+                .map_err(|e| format!("GPM profile verify read body error: {e}"))?;
+
+            if let Ok(body) = serde_json::from_str::<serde_json::Value>(&text) {
+                return Ok(body["success"].as_bool().unwrap_or(false)
+                    && body["data"]["id"].as_str() == Some(profile_id));
+            }
+            // parse failed — try next URL if available
         }
 
         if saw_not_found {
             Ok(false)
         } else {
-            Err("GPM profile verify failed".to_string())
+            Err("GPM profile verify failed: all endpoints returned unparseable responses"
+                .to_string())
         }
     }
 
